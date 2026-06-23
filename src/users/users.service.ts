@@ -36,6 +36,8 @@ export class UsersService {
     refreshTokenHash: string;
     userAgent: string;
     ipAddress: string;
+    country?: string;
+    city?: string;
   }): Promise<void> {
     const user = await this.findById(data.userId);
     if (!user) {
@@ -47,6 +49,8 @@ export class UsersService {
       refreshTokenHash: data.refreshTokenHash,
       userAgent: data.userAgent,
       ipAddress: data.ipAddress,
+      country: data.country ?? null,
+      city: data.city ?? null,
     });
     await this.sessionRepo.save(session);
   }
