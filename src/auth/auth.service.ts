@@ -65,7 +65,12 @@ export class AuthService {
       ipAddress: ip,
     });
 
-    return { accessToken, refreshToken, sessionId };
+    return {
+      accessToken,
+      refreshToken,
+      sessionId,
+      user: { id: user.email, email: user.email, username: user.username },
+    };
   }
 
   async refresh(refreshToken: string, sessionId: string) {
