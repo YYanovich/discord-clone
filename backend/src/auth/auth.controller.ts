@@ -46,10 +46,33 @@ export class AuthController {
 
   // POST /auth/refresh
   @Post('refresh')
-  async refresh(@Req() req: Request) {
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const refreshToken = req.cookies?.refresh_token;
     const sessionId = req.cookies?.session_id;
-    return this.authService.refresh(refreshToken, sessionId);
+
+    const result = await this.authService.refresh(refreshToken, sessionId);
+
+    res.cookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.cookie('session_id', result.sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return {
+      accessToken: result.accessToken,
+      user: result.user,
+    };
   }
 
   // POST /auth/logout

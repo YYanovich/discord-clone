@@ -17,10 +17,8 @@ export declare class AuthController {
             username: string;
         };
     }>;
-    refresh(req: Request): Promise<{
+    refresh(req: Request, res: Response): Promise<{
         accessToken: string;
-        refreshToken: string;
-        sessionId: `${string}-${string}-${string}-${string}-${string}`;
         user: {
             id: string;
             email: string;

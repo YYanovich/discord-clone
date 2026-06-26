@@ -44,10 +44,26 @@ let AuthController = class AuthController {
             user: result.user,
         };
     }
-    async refresh(req) {
+    async refresh(req, res) {
         const refreshToken = req.cookies?.refresh_token;
         const sessionId = req.cookies?.session_id;
-        return this.authService.refresh(refreshToken, sessionId);
+        const result = await this.authService.refresh(refreshToken, sessionId);
+        res.cookie('refresh_token', result.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+        res.cookie('session_id', result.sessionId, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+        return {
+            accessToken: result.accessToken,
+            user: result.user,
+        };
     }
     async logout(req, res) {
         const sessionId = req.cookies?.session_id;
@@ -77,8 +93,9 @@ __decorate([
 __decorate([
     (0, common_1.Post)('refresh'),
     __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "refresh", null);
 __decorate([
