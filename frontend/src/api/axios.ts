@@ -2,7 +2,7 @@ import axios from "axios";
 import { useAuthStore } from "../store/authStore";
 
 export const axiosBase = axios.create({
-  baseURL: "http:localhost:3000/api",
+  baseURL: "http://localhost:3000/api",
   withCredentials: true,
 });
 
@@ -21,7 +21,12 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    if (
+      error.response?.status === 401 &&
+      !original._retry &&
+      !original.url?.includes("/auth/login") &&
+      !original.url?.includes("/auth/register")
+    ) {
       original._retry = true;
       try {
         const { data } = await axiosBase.post("/auth/refresh");
