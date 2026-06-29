@@ -1,19 +1,18 @@
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
-import { RedisService } from '../common/redis/redis.service';
 import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+export interface IRegisterResponse {
+    success: boolean;
+    message: string;
+}
 export declare class AuthService {
     private usersService;
     private jwtService;
-    private redisService;
-    constructor(usersService: UsersService, jwtService: JwtService, redisService: RedisService);
-    register(dto: RegisterDto): Promise<{
-        id: string;
-        email: string;
-    }>;
-    login(dto: LoginDto, userAgent: string, ip: string): Promise<{
+    constructor(usersService: UsersService, jwtService: JwtService);
+    register(dto: RegisterDto): Promise<IRegisterResponse>;
+    login(dto: LoginDto, fingerprint: string, ipAddress: string, userAgent: string): Promise<{
         accessToken: string;
         refreshToken: string;
         sessionId: `${string}-${string}-${string}-${string}-${string}`;
@@ -23,7 +22,7 @@ export declare class AuthService {
             username: string;
         };
     }>;
-    issueTokens(user: User, userAgent: string, ip: string): Promise<{
+    issueTokens(user: User, fingerprint: string, ipAddress: string, userAgent: string): Promise<{
         accessToken: string;
         refreshToken: string;
         sessionId: `${string}-${string}-${string}-${string}-${string}`;
@@ -33,10 +32,10 @@ export declare class AuthService {
             username: string;
         };
     }>;
-    refresh(refreshToken: string, sessionId: string): Promise<{
+    refresh(refreshToken: string, sessionId: string, fingerprint: string): Promise<{
         accessToken: string;
         refreshToken: string;
-        sessionId: `${string}-${string}-${string}-${string}-${string}`;
+        sessionId: string;
         user: {
             id: string;
             email: string;

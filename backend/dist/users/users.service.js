@@ -32,27 +32,54 @@ let UsersService = class UsersService {
         return this.userRepo.findOne({ where: { id } });
     }
     async create(data) {
+        const existingUsername = await this.userRepo.findOne({
+            where: { username: data.username },
+        });
+        if (existingUsername) {
+            throw new Error('USERNAME_TAKEN');
+        }
         const user = this.userRepo.create(data);
         return this.userRepo.save(user);
     }
     async createSession(data) {
         const user = await this.findById(data.userId);
         if (!user) {
-            throw new common_1.NotFoundException(`User with ID ${data.userId} not found`);
+            throw new common_1.NotFoundException('User not found');
         }
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
         const session = this.sessionRepo.create({
             id: data.sessionId,
-            user,
+            user: user,
             refreshTokenHash: data.refreshTokenHash,
+            fingerprint: data.fingerprint,
             userAgent: data.userAgent,
             ipAddress: data.ipAddress,
             country: data.country ?? null,
             city: data.city ?? null,
+            expiresAt,
         });
         await this.sessionRepo.save(session);
     }
+    async findActiveSession(sessionId) {
+        return this.sessionRepo.findOne({
+            where: { id: sessionId, isActive: true },
+            relations: {
+                user: true,
+            },
+        });
+    }
+    async updateSessionRefreshToken(sessionId, refreshTokenHash) {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+        await this.sessionRepo.update({ id: sessionId }, {
+            refreshTokenHash,
+            expiresAt,
+            lastActiveAt: new Date(),
+        });
+    }
     async deactivateSession(sessionId) {
-        await this.sessionRepo.update({ id: sessionId }, { isActive: false });
+        await this.sessionRepo.update({ id: sessionId }, { isActive: false, refreshTokenHash: null });
     }
 };
 exports.UsersService = UsersService;

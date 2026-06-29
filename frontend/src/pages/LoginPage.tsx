@@ -91,15 +91,17 @@ export default function LoginPage() {
                   }));
               }}
               className={`w-full bg-zinc-900/90 text-zinc-100 placeholder-zinc-600 rounded-lg px-3.5 py-2.5 text-sm
-              border ${errors.email ? "border-red-500/50 focus:border-red-500" : "border-zinc-800 focus:border-indigo-500"}
-              focus:outline-none focus:ring-4 ${errors.email ? "focus:ring-red-500/10" : "focus:ring-indigo-500/10"} transition-all duration-200`}
+    border ${errors.email ? "border-red-500/50 focus:border-red-500" : "border-zinc-800 focus:border-indigo-500"}
+    focus:outline-none focus:ring-4 ${errors.email ? "focus:ring-red-500/10" : "focus:ring-indigo-500/10"} transition-all duration-200`}
               placeholder="name@example.com"
             />
-            {errors.email && (
-              <p className="text-red-400 text-xs font-medium mt-0.5">
-                {errors.email}
-              </p>
-            )}
+            <div className="h-1">
+              {errors.email && (
+                <p className="text-red-400 text-xs font-medium leading-4">
+                  {errors.email}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -123,11 +125,13 @@ export default function LoginPage() {
               focus:outline-none focus:ring-4 ${errors.password ? "focus:ring-red-500/10" : "focus:ring-indigo-500/10"} transition-all duration-200`}
               placeholder="••••••••"
             />
-            {errors.password && (
-              <p className="text-red-400 text-xs font-medium mt-0.5">
-                {errors.password}
-              </p>
-            )}
+            <div className="h-1">
+              {errors.password && (
+                <p className="text-red-400 text-xs font-medium leading-4">
+                  {errors.password}
+                </p>
+              )}
+            </div>
           </div>
 
           <button

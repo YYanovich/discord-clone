@@ -4,10 +4,12 @@ import RegisterPage from "./pages/RegisterPage";
 import AppPage from "./pages/AppPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
+import { Toaster } from "sonner";
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster theme="dark" position="top-right" richColors />
       <Routes>
         <Route
           path="/login"
