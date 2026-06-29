@@ -5,10 +5,7 @@ import { LoginDto } from './dto/login.dto';
 export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
-    register(dto: RegisterDto): Promise<{
-        id: string;
-        email: string;
-    }>;
+    register(dto: RegisterDto): Promise<import("./auth.service").IRegisterResponse>;
     login(dto: LoginDto, req: Request, res: Response): Promise<{
         accessToken: string;
         user: {
@@ -26,6 +23,7 @@ export declare class AuthController {
         };
     }>;
     logout(req: Request, res: Response): Promise<{
-        ok: boolean;
+        success: boolean;
     }>;
+    private setCookies;
 }

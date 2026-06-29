@@ -16,10 +16,13 @@ export declare class UsersService {
         userId: string;
         sessionId: string;
         refreshTokenHash: string;
+        fingerprint: string;
         userAgent: string;
         ipAddress: string;
         country?: string;
         city?: string;
     }): Promise<void>;
+    findActiveSession(sessionId: string): Promise<Session | null>;
+    updateSessionRefreshToken(sessionId: string, refreshTokenHash: string): Promise<void>;
     deactivateSession(sessionId: string): Promise<void>;
 }

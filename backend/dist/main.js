@@ -12,7 +12,7 @@ async function bootstrap() {
         origin: 'http://localhost:5173',
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Fingerprint'],
     });
     app.use((0, cookie_parser_1.default)());
     app.setGlobalPrefix('api');

@@ -13,8 +13,10 @@ export class Session {
   id!: string;
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   user!: User;
+  @Column({ type: 'text', nullable: true })
+  refreshTokenHash!: string | null;
   @Column()
-  refreshTokenHash!: string;
+  fingerprint!: string;
   @Column()
   userAgent!: string;
   @Column()
@@ -25,6 +27,8 @@ export class Session {
   city!: string | null;
   @Column({ default: true })
   isActive!: boolean;
+  @Column()
+  expiresAt!: Date;
   @CreateDateColumn()
   createdAt!: Date;
   @Column({ nullable: true })

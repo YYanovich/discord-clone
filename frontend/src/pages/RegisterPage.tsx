@@ -8,6 +8,7 @@ import {
   validateUsername,
 } from "../utils/validation";
 import { AxiosError } from "axios";
+import { toast } from "sonner";
 
 interface IFormErrors {
   email?: string;
@@ -63,12 +64,14 @@ export default function RegisterPage() {
 
     try {
       await api.post("/auth/register", { email, username, password });
+      toast.success("Account created successfully! Please sign in.");
       navigate("/login");
     } catch (err) {
       const axiosError = err as AxiosError<IBackendErrorResponse>;
-      setErrors({
-        server: axiosError.response?.data?.message ?? "Registration error",
-      });
+      const errorMessage =
+        axiosError.response?.data?.message ?? "Registration error";
+      setErrors({ server: errorMessage });
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -116,11 +119,13 @@ export default function RegisterPage() {
               focus:outline-none focus:ring-4 ${errors.email ? "focus:ring-red-500/10" : "focus:ring-indigo-500/10"} transition-all duration-200`}
               placeholder="name@example.com"
             />
-            {errors.email && (
-              <p className="text-red-400 text-xs font-medium mt-0.5">
-                {errors.email}
-              </p>
-            )}
+            <div className="h-1">
+              {errors.email && (
+                <p className="text-red-400 text-xs font-medium leading-4">
+                  {errors.email}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -136,11 +141,14 @@ export default function RegisterPage() {
               focus:outline-none focus:ring-4 ${errors.username ? "focus:ring-red-500/10" : "focus:ring-indigo-500/10"} transition-all duration-200`}
               placeholder="cooluser123"
             />
-            {errors.username && (
-              <p className="text-red-400 text-xs font-medium mt-0.5">
-                {errors.username}
-              </p>
-            )}
+            <div className="h-1">
+              {errors.username && (
+                <p className="text-red-400 text-xs font-medium leading-4">
+                  {errors.username}
+                </p>
+              )}
+              <div />
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -164,11 +172,13 @@ export default function RegisterPage() {
               focus:outline-none focus:ring-4 ${errors.password ? "focus:ring-red-500/10" : "focus:ring-indigo-500/10"} transition-all duration-200`}
               placeholder="••••••••"
             />
-            {errors.password && (
-              <p className="text-red-400 text-xs font-medium mt-0.5">
-                {errors.password}
-              </p>
-            )}
+            <div className="h-1">
+              {errors.password && (
+                <p className="text-red-400 text-xs font-medium leading-4">
+                  {errors.password}
+                </p>
+              )}
+            </div>
           </div>
 
           <button

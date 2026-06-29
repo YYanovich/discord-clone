@@ -16,11 +16,13 @@ let Session = class Session {
     id;
     user;
     refreshTokenHash;
+    fingerprint;
     userAgent;
     ipAddress;
     country;
     city;
     isActive;
+    expiresAt;
     createdAt;
     lastActiveAt;
 };
@@ -34,9 +36,13 @@ __decorate([
     __metadata("design:type", user_entity_1.User)
 ], Session.prototype, "user", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", Object)
+], Session.prototype, "refreshTokenHash", void 0);
+__decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", String)
-], Session.prototype, "refreshTokenHash", void 0);
+], Session.prototype, "fingerprint", void 0);
 __decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", String)
@@ -57,6 +63,10 @@ __decorate([
     (0, typeorm_1.Column)({ default: true }),
     __metadata("design:type", Boolean)
 ], Session.prototype, "isActive", void 0);
+__decorate([
+    (0, typeorm_1.Column)(),
+    __metadata("design:type", Date)
+], Session.prototype, "expiresAt", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)

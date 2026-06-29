@@ -26,40 +26,29 @@ let AuthController = class AuthController {
         return this.authService.register(dto);
     }
     async login(dto, req, res) {
-        const result = await this.authService.login(dto, req.headers['user-agent'] ?? '', req.socket.remoteAddress ?? '');
-        res.cookie('refresh_token', result.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-        res.cookie('session_id', result.sessionId, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        const fingerprint = req.headers['x-fingerprint'];
+        if (!fingerprint) {
+            throw new common_1.UnauthorizedException('Unable to verify device identity');
+        }
+        const ipAddress = req.headers['x-forwarded-for'] ||
+            req.socket.remoteAddress ||
+            '';
+        const userAgent = req.headers['user-agent'] || '';
+        const result = await this.authService.login(dto, fingerprint, ipAddress, userAgent);
+        this.setCookies(res, result.refreshToken, result.sessionId);
         return {
             accessToken: result.accessToken,
             user: result.user,
         };
     }
     async refresh(req, res) {
+        const fingerprint = req.headers['x-fingerprint'];
+        if (!fingerprint)
+            throw new common_1.UnauthorizedException('Device fingerprint is required');
         const refreshToken = req.cookies?.refresh_token;
         const sessionId = req.cookies?.session_id;
-        const result = await this.authService.refresh(refreshToken, sessionId);
-        res.cookie('refresh_token', result.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-        res.cookie('session_id', result.sessionId, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        const result = await this.authService.refresh(refreshToken, sessionId, fingerprint);
+        this.setCookies(res, result.refreshToken, result.sessionId);
         return {
             accessToken: result.accessToken,
             user: result.user,
@@ -70,7 +59,17 @@ let AuthController = class AuthController {
         await this.authService.logout(sessionId);
         res.clearCookie('refresh_token');
         res.clearCookie('session_id');
-        return { ok: true };
+        return { success: true };
+    }
+    setCookies(res, refreshToken, sessionId) {
+        const cookieOptions = {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        };
+        res.cookie('refresh_token', refreshToken, cookieOptions);
+        res.cookie('session_id', sessionId, cookieOptions);
     }
 };
 exports.AuthController = AuthController;
