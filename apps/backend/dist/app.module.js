@@ -15,6 +15,10 @@ const users_module_1 = require("./users/users.module");
 const redis_module_1 = require("./common/redis/redis.module");
 const user_entity_1 = require("./users/entities/user.entity");
 const session_entity_1 = require("./users/entities/session.entity");
+const guild_entity_1 = require("./guilds/entities/guild.entity");
+const category_entity_1 = require("./guilds/entities/category.entity");
+const channel_entity_1 = require("./guilds/entities/channel.entity");
+const membership_entity_1 = require("./guilds/entities/membership.entity");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -29,7 +33,7 @@ exports.AppModule = AppModule = __decorate([
                 username: process.env.DB_USER ?? 'discord',
                 password: process.env.DB_PASS ?? 'secret',
                 database: process.env.DB_NAME ?? 'discord',
-                entities: [user_entity_1.User, session_entity_1.Session],
+                entities: [user_entity_1.User, session_entity_1.Session, guild_entity_1.Guild, category_entity_1.Category, channel_entity_1.Channel, membership_entity_1.Membership],
                 synchronize: false,
                 migrations: ['dist/migrations/*.js'],
                 migrationsRun: true,

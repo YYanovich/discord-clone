@@ -6,6 +6,10 @@ import { UsersModule } from './users/users.module';
 import { RedisModule } from './common/redis/redis.module';
 import { User } from './users/entities/user.entity';
 import { Session } from './users/entities/session.entity';
+import { Guild } from './guilds/entities/guild.entity';
+import { Category } from './guilds/entities/category.entity';
+import { Channel } from './guilds/entities/channel.entity';
+import { Membership } from './guilds/entities/membership.entity';
 
 @Module({
   imports: [
@@ -18,7 +22,7 @@ import { Session } from './users/entities/session.entity';
       username: process.env.DB_USER ?? 'discord',
       password: process.env.DB_PASS ?? 'secret',
       database: process.env.DB_NAME ?? 'discord',
-      entities: [User, Session],
+      entities: [User, Session, Guild, Category, Channel, Membership],
       synchronize: false,
       migrations: ['dist/migrations/*.js'],
       migrationsRun: true,
