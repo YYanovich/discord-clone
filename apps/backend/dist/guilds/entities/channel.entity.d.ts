@@ -9,6 +9,7 @@ export declare class Channel {
     name: string;
     type: ChannelType;
     guild: Guild;
+    guildId: string;
     category: Category | null;
     categoryId: string | null;
     position: number;

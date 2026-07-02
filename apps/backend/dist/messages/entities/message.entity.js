@@ -9,51 +9,54 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Guild = void 0;
+exports.Message = void 0;
 const typeorm_1 = require("typeorm");
 const user_entity_1 = require("../../users/entities/user.entity");
-const category_entity_1 = require("./category.entity");
-const channel_entity_1 = require("./channel.entity");
-const membership_entity_1 = require("./membership.entity");
-let Guild = class Guild {
+const channel_entity_1 = require("../../guilds/entities/channel.entity");
+let Message = class Message {
 };
-exports.Guild = Guild;
+exports.Message = Message;
 __decorate([
     (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
     __metadata("design:type", String)
-], Guild.prototype, "id", void 0);
+], Message.prototype, "id", void 0);
+__decorate([
+    (0, typeorm_1.Column)('text'),
+    __metadata("design:type", String)
+], Message.prototype, "content", void 0);
+__decorate([
+    (0, typeorm_1.ManyToOne)(() => channel_entity_1.Channel, { onDelete: 'CASCADE' }),
+    __metadata("design:type", channel_entity_1.Channel)
+], Message.prototype, "channel", void 0);
 __decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", String)
-], Guild.prototype, "name", void 0);
+], Message.prototype, "channelId", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => user_entity_1.User, { onDelete: 'CASCADE' }),
     __metadata("design:type", user_entity_1.User)
-], Guild.prototype, "owner", void 0);
+], Message.prototype, "author", void 0);
 __decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", String)
-], Guild.prototype, "ownerId", void 0);
+], Message.prototype, "authorId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: false }),
+    __metadata("design:type", Boolean)
+], Message.prototype, "isDeleted", void 0);
 __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
-    __metadata("design:type", String)
-], Guild.prototype, "iconUrl", void 0);
-__decorate([
-    (0, typeorm_1.OneToMany)(() => category_entity_1.Category, (category) => category.guild, { cascade: true }),
-    (0, typeorm_1.OneToMany)(() => channel_entity_1.Channel, (channel) => channel.guild, { cascade: true }),
-    __metadata("design:type", Array)
-], Guild.prototype, "channels", void 0);
-__decorate([
-    (0, typeorm_1.OneToMany)(() => membership_entity_1.Membership, (membership) => membership.guild, {
-        cascade: true,
-    }),
-    __metadata("design:type", Array)
-], Guild.prototype, "memberships", void 0);
+    __metadata("design:type", Date)
+], Message.prototype, "editedAt", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
-], Guild.prototype, "createdAt", void 0);
-exports.Guild = Guild = __decorate([
-    (0, typeorm_1.Entity)('guilds')
-], Guild);
-//# sourceMappingURL=guilds.entity.js.map
+], Message.prototype, "createdAt", void 0);
+__decorate([
+    (0, typeorm_1.UpdateDateColumn)(),
+    __metadata("design:type", Date)
+], Message.prototype, "updatedAt", void 0);
+exports.Message = Message = __decorate([
+    (0, typeorm_1.Entity)('messages')
+], Message);
+//# sourceMappingURL=message.entity.js.map

@@ -6,4 +6,5 @@ export declare class RedisService implements OnModuleDestroy {
     get(key: string): Promise<string | null>;
     del(key: string): Promise<void>;
     onModuleDestroy(): Promise<void>;
+    keys(pattern: string): Promise<string[]>;
 }

@@ -14,7 +14,7 @@ export class User {
   email!: string;
   @Column()
   username!: string;
-  @Column()
+  @Column({ select: false })
   passwordHash!: string;
   @Column({ default: false })
   isEmailVerified!: boolean;

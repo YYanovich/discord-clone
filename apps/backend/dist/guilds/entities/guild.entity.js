@@ -15,6 +15,7 @@ const user_entity_1 = require("../../users/entities/user.entity");
 const category_entity_1 = require("./category.entity");
 const channel_entity_1 = require("./channel.entity");
 const membership_entity_1 = require("./membership.entity");
+const invite_entity_1 = require("./invite.entity");
 let Guild = class Guild {
 };
 exports.Guild = Guild;
@@ -52,6 +53,10 @@ __decorate([
     }),
     __metadata("design:type", Array)
 ], Guild.prototype, "memberships", void 0);
+__decorate([
+    (0, typeorm_1.OneToMany)(() => invite_entity_1.Invite, (invite) => invite.guild, { cascade: true }),
+    __metadata("design:type", Array)
+], Guild.prototype, "invites", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)

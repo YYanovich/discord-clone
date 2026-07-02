@@ -22,20 +22,22 @@ __decorate([
 ], Membership.prototype, "id", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => user_entity_1.User, { onDelete: 'CASCADE' }),
+    (0, typeorm_1.JoinColumn)({ name: 'userId' }),
     __metadata("design:type", user_entity_1.User)
 ], Membership.prototype, "user", void 0);
 __decorate([
-    (0, typeorm_1.Column)(),
+    (0, typeorm_1.Column)('uuid'),
     __metadata("design:type", String)
 ], Membership.prototype, "userId", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => guild_entity_1.Guild, (guild) => guild.memberships, {
-        onDelete: 'CASCADE'
+        onDelete: 'CASCADE',
     }),
+    (0, typeorm_1.JoinColumn)({ name: 'guildId' }),
     __metadata("design:type", guild_entity_1.Guild)
 ], Membership.prototype, "guild", void 0);
 __decorate([
-    (0, typeorm_1.Column)(),
+    (0, typeorm_1.Column)('uuid'),
     __metadata("design:type", String)
 ], Membership.prototype, "guildId", void 0);
 __decorate([

@@ -33,18 +33,23 @@ __decorate([
     (0, typeorm_1.Column)({
         type: 'enum',
         enum: ChannelType,
-        default: ChannelType.TEXT
+        default: ChannelType.TEXT,
     }),
     __metadata("design:type", String)
 ], Channel.prototype, "type", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => guild_entity_1.Guild, (guild) => guild.channels, { onDelete: 'CASCADE' }),
+    (0, typeorm_1.JoinColumn)({ name: 'guildId' }),
     __metadata("design:type", guild_entity_1.Guild)
 ], Channel.prototype, "guild", void 0);
 __decorate([
+    (0, typeorm_1.Column)('uuid'),
+    __metadata("design:type", String)
+], Channel.prototype, "guildId", void 0);
+__decorate([
     (0, typeorm_1.ManyToOne)(() => category_entity_1.Category, (category) => category.channels, {
         onDelete: 'CASCADE',
-        nullable: true
+        nullable: true,
     }),
     __metadata("design:type", category_entity_1.Category)
 ], Channel.prototype, "category", void 0);

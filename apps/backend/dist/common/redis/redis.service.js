@@ -34,6 +34,9 @@ let RedisService = class RedisService {
     async onModuleDestroy() {
         await this.client.quit();
     }
+    async keys(pattern) {
+        return this.client.keys(pattern);
+    }
 };
 exports.RedisService = RedisService;
 exports.RedisService = RedisService = __decorate([

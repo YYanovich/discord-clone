@@ -2,6 +2,7 @@ import { User } from '../../users/entities/user.entity';
 import { Category } from './category.entity';
 import { Channel } from './channel.entity';
 import { Membership } from './membership.entity';
+import { Invite } from './invite.entity';
 export declare class Guild {
     id: string;
     name: string;
@@ -11,5 +12,6 @@ export declare class Guild {
     categories: Category[];
     channels: Channel[];
     memberships: Membership[];
+    invites: Invite[];
     createdAt: Date;
 }

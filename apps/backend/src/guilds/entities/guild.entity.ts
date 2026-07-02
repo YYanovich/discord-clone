@@ -11,7 +11,7 @@ import { User } from '../../users/entities/user.entity';
 import { Category } from './category.entity';
 import { Channel } from './channel.entity';
 import { Membership } from './membership.entity';
-
+import { Invite } from './invite.entity';
 @Entity('guilds')
 export class Guild {
   @PrimaryGeneratedColumn('uuid')
@@ -25,7 +25,7 @@ export class Guild {
   @Column({ nullable: true })
   iconUrl!: string | null;
   @OneToMany(() => Category, (category) => category.guild, { cascade: true })
-  categories!:Category[]
+  categories!: Category[];
   @OneToMany(() => Channel, (channel) => channel.guild, { cascade: true })
   channels!: Channel[];
 
@@ -33,6 +33,8 @@ export class Guild {
     cascade: true,
   })
   memberships!: Membership[];
+  @OneToMany(() => Invite, (invite) => invite.guild, { cascade: true })
+  invites!: Invite[];
   @CreateDateColumn()
-  createdAt!: Date
+  createdAt!: Date;
 }
