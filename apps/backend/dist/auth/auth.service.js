@@ -67,7 +67,7 @@ let AuthService = class AuthService {
     }
     async issueTokens(user, fingerprint, ipAddress, userAgent) {
         const sessionId = crypto_1.default.randomUUID();
-        const accessToken = this.jwtService.sign({ sub: user.id, email: user.email, sessionId, fingerprint }, { expiresIn: '15m' });
+        const accessToken = this.jwtService.sign({ sub: user.id, sessionId, fingerprint }, { expiresIn: '15m' });
         const refreshToken = crypto_1.default.randomBytes(40).toString('hex');
         const refreshHash = await argon2_1.default.hash(refreshToken, {
             type: argon2_1.default.argon2id,

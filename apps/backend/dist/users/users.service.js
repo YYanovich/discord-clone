@@ -24,7 +24,15 @@ let UsersService = class UsersService {
         this.sessionRepo = sessionRepo;
     }
     async findByEmail(email) {
-        return this.userRepo.findOne({ where: { email } });
+        return this.userRepo.findOne({
+            where: { email },
+            select: {
+                id: true,
+                email: true,
+                username: true,
+                passwordHash: true,
+            },
+        });
     }
     async findById(id) {
         return this.userRepo.findOne({ where: { id } });
@@ -60,6 +68,9 @@ let UsersService = class UsersService {
         await this.sessionRepo.save(session);
     }
     async findActiveSession(sessionId) {
+        if (!sessionId) {
+            return null;
+        }
         return this.sessionRepo.findOne({
             where: { id: sessionId, isActive: true },
             relations: {

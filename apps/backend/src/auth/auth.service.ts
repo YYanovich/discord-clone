@@ -84,7 +84,7 @@ export class AuthService {
   ) {
     const sessionId = crypto.randomUUID();
     const accessToken = this.jwtService.sign(
-      { sub: user.id, email: user.email, sessionId, fingerprint },
+      { sub: user.id, sessionId, fingerprint },
       { expiresIn: '15m' },
     );
     const refreshToken = crypto.randomBytes(40).toString('hex');

@@ -6,7 +6,15 @@ import { UsersModule } from './users/users.module';
 import { RedisModule } from './common/redis/redis.module';
 import { User } from './users/entities/user.entity';
 import { Session } from './users/entities/session.entity';
-
+import { Guild } from './guilds/entities/guild.entity';
+import { Category } from './guilds/entities/category.entity';
+import { Channel } from './guilds/entities/channel.entity';
+import { Membership } from './guilds/entities/membership.entity';
+import { GuildsModule } from './guilds/guilds.module';
+import { Invite } from './guilds/entities/invite.entity';
+import { EventsModule } from './events/events.module';
+import { Message } from './messages/entities/message.entity';
+import { MessagesModule } from './messages/messages.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -18,7 +26,16 @@ import { Session } from './users/entities/session.entity';
       username: process.env.DB_USER ?? 'discord',
       password: process.env.DB_PASS ?? 'secret',
       database: process.env.DB_NAME ?? 'discord',
-      entities: [User, Session],
+      entities: [
+        User,
+        Session,
+        Guild,
+        Category,
+        Channel,
+        Membership,
+        Invite,
+        Message,
+      ],
       synchronize: false,
       migrations: ['dist/migrations/*.js'],
       migrationsRun: true,
@@ -27,6 +44,9 @@ import { Session } from './users/entities/session.entity';
     RedisModule,
     AuthModule,
     UsersModule,
+    GuildsModule,
+    EventsModule,
+    MessagesModule,
   ],
 })
 export class AppModule {}

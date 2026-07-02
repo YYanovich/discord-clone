@@ -14,7 +14,15 @@ export class UsersService {
   ) {}
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.userRepo.findOne({ where: { email } });
+    return this.userRepo.findOne({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        passwordHash: true,
+      },
+    });
   }
 
   async findById(id: string): Promise<User | null> {
@@ -68,6 +76,9 @@ export class UsersService {
   }
 
   async findActiveSession(sessionId: string): Promise<Session | null> {
+    if (!sessionId) {
+      return null;
+    }
     return this.sessionRepo.findOne({
       where: { id: sessionId, isActive: true },
       relations: {

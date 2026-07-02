@@ -15,6 +15,15 @@ const users_module_1 = require("./users/users.module");
 const redis_module_1 = require("./common/redis/redis.module");
 const user_entity_1 = require("./users/entities/user.entity");
 const session_entity_1 = require("./users/entities/session.entity");
+const guild_entity_1 = require("./guilds/entities/guild.entity");
+const category_entity_1 = require("./guilds/entities/category.entity");
+const channel_entity_1 = require("./guilds/entities/channel.entity");
+const membership_entity_1 = require("./guilds/entities/membership.entity");
+const guilds_module_1 = require("./guilds/guilds.module");
+const invite_entity_1 = require("./guilds/entities/invite.entity");
+const events_module_1 = require("./events/events.module");
+const message_entity_1 = require("./messages/entities/message.entity");
+const messages_module_1 = require("./messages/messages.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -29,7 +38,16 @@ exports.AppModule = AppModule = __decorate([
                 username: process.env.DB_USER ?? 'discord',
                 password: process.env.DB_PASS ?? 'secret',
                 database: process.env.DB_NAME ?? 'discord',
-                entities: [user_entity_1.User, session_entity_1.Session],
+                entities: [
+                    user_entity_1.User,
+                    session_entity_1.Session,
+                    guild_entity_1.Guild,
+                    category_entity_1.Category,
+                    channel_entity_1.Channel,
+                    membership_entity_1.Membership,
+                    invite_entity_1.Invite,
+                    message_entity_1.Message,
+                ],
                 synchronize: false,
                 migrations: ['dist/migrations/*.js'],
                 migrationsRun: true,
@@ -37,6 +55,9 @@ exports.AppModule = AppModule = __decorate([
             redis_module_1.RedisModule,
             auth_module_1.AuthModule,
             users_module_1.UsersModule,
+            guilds_module_1.GuildsModule,
+            events_module_1.EventsModule,
+            messages_module_1.MessagesModule,
         ],
     })
 ], AppModule);
