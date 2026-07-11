@@ -22,7 +22,7 @@ export declare class GuildsService {
     joinByInvite(code: string, userId: string): Promise<void>;
     joinGuild(guildId: string, userId: string): Promise<void>;
     leaveGuild(guildId: string, userId: string): Promise<void>;
-    getMembers(guildId: string, userId: string): Promise<Membership[]>;
+    getMembers(guildId: string, userId?: string): Promise<Membership[]>;
     private assertMembership;
     private assertOwnership;
 }

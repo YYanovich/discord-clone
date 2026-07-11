@@ -99,6 +99,26 @@ let EventsGateway = class EventsGateway {
         }
         this.logger.log(`Client disconnected: ${userId}`);
     }
+    async handleGuildJoin(client, data) {
+        client.join(`guild:${data.guildId}`);
+        const members = await this.guildsService.getMembers(data.guildId, client.data.userId);
+        for (const member of members) {
+            const keys = await this.redisService.keys(`presence:${member.userId}:*`);
+            if (keys.length > 0) {
+                client.emit('presence:update', {
+                    userId: member.userId,
+                    status: 'online',
+                });
+            }
+        }
+    }
+    handleChannelJoin(client, data) {
+        client.join(`guild:${data.guildId}`);
+        return {
+            event: 'channel:join:ack',
+            data: { guildId: data.guildId, channelId: data.channelId },
+        };
+    }
     async handleHeartbeat(client) {
         const { userId, sessionId } = client.data;
         if (!userId)
@@ -133,13 +153,20 @@ let EventsGateway = class EventsGateway {
             content: message.content,
             channelId: message.channelId,
             authorId: message.authorId,
-            createdAt: message.createdAt,
+            createdAt: message.createdAt instanceof Date
+                ? message.createdAt.toISOString()
+                : message.createdAt,
         });
         return { event: 'message:ack', data: { id: message.id } };
     }
     async handleHistory(client, data) {
         const messages = await this.messagesService.findByChannel(data.channelId, data.before);
-        return { event: 'message:history', data: messages };
+        client.emit('message:history', {
+            data: messages.map((m) => ({
+                ...m,
+                createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : m.createdAt,
+            })),
+        });
     }
 };
 exports.EventsGateway = EventsGateway;
@@ -147,6 +174,22 @@ __decorate([
     (0, websockets_1.WebSocketServer)(),
     __metadata("design:type", socket_io_1.Server)
 ], EventsGateway.prototype, "server", void 0);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('guild:join'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [socket_io_1.Socket, Object]),
+    __metadata("design:returntype", Promise)
+], EventsGateway.prototype, "handleGuildJoin", null);
+__decorate([
+    (0, websockets_1.SubscribeMessage)('channel:join'),
+    __param(0, (0, websockets_1.ConnectedSocket)()),
+    __param(1, (0, websockets_1.MessageBody)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [socket_io_1.Socket, Object]),
+    __metadata("design:returntype", void 0)
+], EventsGateway.prototype, "handleChannelJoin", null);
 __decorate([
     (0, websockets_1.SubscribeMessage)('heartbeat'),
     __param(0, (0, websockets_1.ConnectedSocket)()),
@@ -189,7 +232,7 @@ __decorate([
 exports.EventsGateway = EventsGateway = __decorate([
     (0, websockets_1.WebSocketGateway)({
         cors: {
-            origin: 'http://localhost:5173',
+            origin: ['http://localhost:5173', 'http://localhost:4173'],
             credentials: true,
         },
     }),
