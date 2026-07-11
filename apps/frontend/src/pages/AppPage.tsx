@@ -1,39 +1,114 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
+import { useGuildStore } from "../store/guildStore";
+import { useSocket } from "../hooks/useSocket";
+import { useSocketStore } from "../store/socketStore";
 import api from "../api/axios";
+import GuildSidebar from "../components/layout/GuildSidebar";
+import ChannelSidebar from "../components/layout/ChannelSidebar";
+import ChatArea from "../components/layout/ChatArea";
+import MemberList from "../components/layout/MemberList";
 
 export default function AppPage() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const currentUser = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const isAuthLoading = useAuthStore((state) => state.isLoading);
+  const {
+    setGuilds,
+    activeGuildId,
+    setActiveGuild,
+    setMembers,
+    activeChannelId,
+    hydrateFromCache,
+  } = useGuildStore();
 
-  const handleLogout = async () => {
-    try {
-      await api.post("/auth/logout");
-    } finally {
-      logout();
-      navigate("/login");
+  const socketRef = useSocket();
+  const isSocketConnected = useSocketStore((state) => state.isConnected);
+
+  useEffect(() => {
+    hydrateFromCache();
+  }, []);
+
+  useEffect(() => {
+    if (isAuthLoading || !accessToken) return;
+
+    let cancelled = false;
+    const cachedActiveGuildId = useGuildStore.getState().activeGuildId;
+
+    api.get("/guilds").then(async ({ data }) => {
+      if (cancelled || !data.length) return;
+
+      const fullGuilds = await Promise.all(
+        (data as { id: string }[]).map((g) =>
+          api.get(`/guilds/${g.id}`).then((r) => r.data),
+        ),
+      );
+
+      if (cancelled) return;
+
+      setGuilds(fullGuilds);
+
+      const targetGuildId =
+        cachedActiveGuildId &&
+        fullGuilds.some((g: { id: string }) => g.id === cachedActiveGuildId)
+          ? cachedActiveGuildId
+          : fullGuilds[0]?.id;
+
+      if (targetGuildId) {
+        setActiveGuild(targetGuildId);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, isAuthLoading]);
+
+  useEffect(() => {
+    if (!activeGuildId || isAuthLoading || !accessToken) return;
+    let cancelled = false;
+
+    api.get(`/guilds/${activeGuildId}/members`).then(({ data }) => {
+      if (cancelled) return;
+      setMembers(activeGuildId, data);
+    });
+
+    const currentGuild = useGuildStore
+      .getState()
+      .guilds.find((g) => g.id === activeGuildId);
+    if (!currentGuild?.channels?.length) {
+      api.get(`/guilds/${activeGuildId}`).then(({ data }) => {
+        if (cancelled) return;
+        setGuilds([data]);
+      });
     }
-  };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGuildId, accessToken, isAuthLoading]);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket?.connected || !isSocketConnected || !activeGuildId) return;
+
+    socket.emit("guild:join", { guildId: activeGuildId });
+
+    if (activeChannelId) {
+      socket.emit("channel:join", {
+        channelId: activeChannelId,
+        guildId: activeGuildId,
+        userId: currentUser?.id,
+      });
+    }
+  }, [activeGuildId, activeChannelId, currentUser?.id, isSocketConnected]);
+
   return (
-    <div className="min-h-screen bg-[#36393f] flex flex-col items-center justify-center gap-4">
-      <div className="bg-[#2f3136] rounded-lg p-8 text-center">
-        <div className="w-16 h-16 bg-[#7289da] rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4">
-          {user?.username?.[0]?.toUpperCase() ?? "?"}
-        </div>
-        <h1 className="text-white text-xl font-bold mb-1">
-          Hi, {user?.username}!
-        </h1>
-        <p className="text-[#b9bbbe] text-sm mb-6">{user?.email}</p>
-        <p className="text-[#72767d] text-xs mb-6">
-          FE2 feature: Discord layout will be here
-        </p>
-        <button
-          onClick={handleLogout}
-          className="bg-[#f04747] hover:bg-[#d84040] text-white px-6 py-2 rounded transition-colors"
-        >
-          Logout
-        </button>
-      </div>
+    <div className="h-screen bg-zinc-950 flex overflow-hidden">
+      <GuildSidebar socketRef={socketRef} />
+      <ChannelSidebar socketRef={socketRef} />
+      <ChatArea socketRef={socketRef} />
+      <MemberList />
     </div>
   );
 }

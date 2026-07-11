@@ -168,14 +168,17 @@ export class GuildsService {
     await this.membershipRepo.delete({ guildId, userId });
   }
 
-  async getMembers(guildId: string, userId: string) {
-    await this.assertMembership(guildId, userId);
+  async getMembers(guildId: string, userId?: string) {
+    if (userId) {
+      await this.assertMembership(guildId, userId);
+    }
 
     return this.membershipRepo.find({
       where: { guildId },
       relations: { user: true },
       select: {
         id: true,
+        userId: true,
         joinedAt: true,
         user: {
           id: true,

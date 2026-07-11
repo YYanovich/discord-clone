@@ -19,7 +19,7 @@ import { MessagesService } from '../messages/messages.service';
 
 @WebSocketGateway({
   cors: {
-    origin: 'http://localhost:5173',
+    origin: ['http://localhost:5173', 'http://localhost:4173'],
     credentials: true,
   },
 })
@@ -128,6 +128,42 @@ export class EventsGateway
     this.logger.log(`Client disconnected: ${userId}`);
   }
 
+  @SubscribeMessage('guild:join')
+  async handleGuildJoin(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { guildId: string },
+  ) {
+    client.join(`guild:${data.guildId}`);
+
+    const members = await this.guildsService.getMembers(
+      data.guildId,
+      client.data.userId,
+    );
+
+    for (const member of members) {
+      const keys = await this.redisService.keys(`presence:${member.userId}:*`);
+      if (keys.length > 0) {
+        client.emit('presence:update', {
+          userId: member.userId,
+          status: 'online',
+        });
+      }
+    }
+  }
+
+  @SubscribeMessage('channel:join')
+  handleChannelJoin(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: { guildId: string; channelId: string; userId?: string },
+  ) {
+    client.join(`guild:${data.guildId}`);
+    return {
+      event: 'channel:join:ack',
+      data: { guildId: data.guildId, channelId: data.channelId },
+    };
+  }
+
   @SubscribeMessage('heartbeat')
   async handleHeartbeat(@ConnectedSocket() client: Socket) {
     const { userId, sessionId } = client.data;
@@ -187,7 +223,10 @@ export class EventsGateway
       content: message.content,
       channelId: message.channelId,
       authorId: message.authorId,
-      createdAt: message.createdAt,
+      createdAt:
+        message.createdAt instanceof Date
+          ? message.createdAt.toISOString()
+          : message.createdAt,
     });
 
     return { event: 'message:ack', data: { id: message.id } };
@@ -203,6 +242,12 @@ export class EventsGateway
       data.before,
     );
 
-    return { event: 'message:history', data: messages };
+    client.emit('message:history', {
+      data: messages.map((m) => ({
+        ...m,
+        createdAt:
+          m.createdAt instanceof Date ? m.createdAt.toISOString() : m.createdAt,
+      })),
+    });
   }
 }

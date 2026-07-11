@@ -5,19 +5,17 @@ import "./index.css";
 import { axiosBase } from "./api/axios";
 import { useAuthStore } from "./store/authStore";
 
-async function bootstrap() {
-  try {
-    const { data } = await axiosBase.post("/auth/refresh");
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+
+axiosBase
+  .post("/auth/refresh")
+  .then(({ data }) => {
     useAuthStore.getState().setAuth(data.accessToken, data.user);
-  } catch {
-    useAuthStore.getState().setLoading(false);
-  }
-
-  ReactDOM.createRoot(document.getElementById("root")!).render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>,
-  );
-}
-
-bootstrap();
+  })
+  .catch(() => {
+    useAuthStore.getState().logout(); 
+  });

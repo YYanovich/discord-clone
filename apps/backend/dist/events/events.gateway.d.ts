@@ -16,6 +16,20 @@ export declare class EventsGateway implements OnGatewayInit, OnGatewayConnection
     afterInit(server: Server): Promise<void>;
     handleConnection(client: Socket): Promise<void>;
     handleDisconnect(client: Socket): Promise<void>;
+    handleGuildJoin(client: Socket, data: {
+        guildId: string;
+    }): Promise<void>;
+    handleChannelJoin(client: Socket, data: {
+        guildId: string;
+        channelId: string;
+        userId?: string;
+    }): {
+        event: string;
+        data: {
+            guildId: string;
+            channelId: string;
+        };
+    };
     handleHeartbeat(client: Socket): Promise<{
         event: string;
         data: {
@@ -44,8 +58,5 @@ export declare class EventsGateway implements OnGatewayInit, OnGatewayConnection
     handleHistory(client: Socket, data: {
         channelId: string;
         before?: string;
-    }): Promise<{
-        event: string;
-        data: import("../messages/entities/message.entity").Message[];
-    }>;
+    }): Promise<void>;
 }
