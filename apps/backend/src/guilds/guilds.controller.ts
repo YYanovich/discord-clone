@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
@@ -14,6 +15,11 @@ import { CreateGuildDto } from './dto/create-guild.dto';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { CreateInviteDto } from './dto/create-invite.dto';
+import {
+  PermissionsGuard,
+  RequirePermission,
+} from './guards/permissions.guard';
+import { PermissionFlag } from './entities/role.entity';
 
 interface JwtPayload {
   userId: string;
@@ -52,6 +58,8 @@ export class GuildsController {
   }
 
   @Post(':id/channels')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
   createChannel(
     @Param('id') guildId: string,
     @Body() dto: CreateChannelDto,
@@ -69,17 +77,71 @@ export class GuildsController {
     return this.guildsService.createCategory(guildId, user.userId, dto.name);
   }
 
-  @Post(':id/invite')
-  createInvite(
-    @Param('id') guildId: string,
-    @Body() dto: CreateInviteDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.guildsService.createInvite(guildId, user.userId, dto);
+  @Get(':id/invites')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
+  getInvites(@Param('id') guildId: string, @CurrentUser() user: JwtPayload) {
+    return this.guildsService.getInvites(guildId, user.userId);
   }
 
   @Delete(':id/leave')
   leaveGuild(@Param('id') guildId: string, @CurrentUser() user: JwtPayload) {
     return this.guildsService.leaveGuild(guildId, user.userId);
+  }
+
+  @Delete(':id/members/:userId/kick')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission(PermissionFlag.KICK_MEMBERS)
+  kickMember(
+    @Param('id') guildId: string,
+    @Param('userId') targetUserId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.guildsService.kickMember(guildId, targetUserId, user.userId);
+  }
+
+  @Post(':id/members/:userId/ban')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission(PermissionFlag.BAN_MEMBERS)
+  banMember(
+    @Param('id') guildId: string,
+    @Param('userId') targetUserId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.guildsService.banMember(guildId, targetUserId, user.userId);
+  }
+
+  @Put(':id/channels/:channelId/permissions/:targetId')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
+  async setChannelOverwrite(
+    @Param('id') guildId: string,
+    @Param('channelId') channelId: string,
+    @Param('targetId') targetId: string,
+    @Body() dto: { allow: number; deny: number; type: 'role' | 'user' },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.guildsService.setChannelOverwrite(
+      channelId,
+      targetId,
+      dto.type,
+      dto.allow,
+      dto.deny,
+    );
+  }
+
+  @Delete(':id/channels/:channelId/permissions/:targetId')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
+  async deleteChannelOverwrite(
+    @Param('channelId') channelId: string,
+    @Param('targetId') targetId: string,
+    @Body() dto: { type: 'role' | 'user' },
+  ) {
+    return this.guildsService.deleteChannelOverwrite(
+      channelId,
+      targetId,
+      dto.type,
+    );
   }
 }

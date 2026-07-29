@@ -1,25 +1,36 @@
-# compiled output
+# Compiled output
 /dist
-/node_modules
 /build
+.tsbuildinfo
+
+# Prevent committing compiled JS/types inside src directory
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+
+# Dependencies
+/node_modules
 
 # Logs
 logs
 *.log
 npm-debug.log*
-pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 lerna-debug.log*
 
-# OS
+# OS & Temp
 .DS_Store
+Thumbs.db
+.temp
+.tmp
 
-# Tests
+# Tests & Coverage
 /coverage
 /.nyc_output
 
-# IDEs and editors
+# IDEs and Editors
 /.idea
 .project
 .classpath
@@ -35,22 +46,19 @@ lerna-debug.log*
 !.vscode/launch.json
 !.vscode/extensions.json
 
-# dotenv environment variable files
+# Environment variables
 .env
 .env.development.local
 .env.test.local
 .env.production.local
 .env.local
+*.env
 
-# temp directory
-.temp
-.tmp
-
-# Runtime data
+# Runtime & Lock files
 pids
 *.pid
 *.seed
 *.pid.lock
 
-# Diagnostic reports (https://nodejs.org/api/report.html)
+# Diagnostic reports
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
