@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
 const register_dto_1 = require("./dto/register.dto");
 const login_dto_1 = require("./dto/login.dto");
+const throttler_1 = require("@nestjs/throttler");
 let AuthController = class AuthController {
     constructor(authService) {
         this.authService = authService;
@@ -73,6 +74,7 @@ let AuthController = class AuthController {
 };
 exports.AuthController = AuthController;
 __decorate([
+    (0, throttler_1.Throttle)({ short: { limit: 3, ttl: 60000 } }),
     (0, common_1.Post)('register'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),

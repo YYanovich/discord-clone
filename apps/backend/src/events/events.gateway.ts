@@ -16,6 +16,8 @@ import { Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { MessagesService } from '../messages/messages.service';
+import { PermissionsService } from '../guilds/permission.service';
+import { PermissionFlag } from '../guilds/entities/role.entity';
 
 @WebSocketGateway({
   cors: {
@@ -38,6 +40,7 @@ export class EventsGateway
     private guildsService: GuildsService,
     private redisService: RedisService,
     private messagesService: MessagesService,
+    private permissionsService: PermissionsService,
   ) {}
 
   async afterInit(server: Server) {
@@ -152,16 +155,31 @@ export class EventsGateway
   }
 
   @SubscribeMessage('channel:join')
-  handleChannelJoin(
+  async handleChannelJoin(
     @ConnectedSocket() client: Socket,
-    @MessageBody()
-    data: { guildId: string; channelId: string; userId?: string },
+    @MessageBody() data: { channelId: string; guildId: string },
   ) {
-    client.join(`guild:${data.guildId}`);
-    return {
-      event: 'channel:join:ack',
-      data: { guildId: data.guildId, channelId: data.channelId },
-    };
+    const { userId } = client.data;
+
+    const canView = await this.permissionsService.hasPermission(
+      userId,
+      data.guildId,
+      PermissionFlag.VIEW_CHANNEL,
+      data.channelId,
+    );
+
+    if (!canView) {
+      client.emit('error', {
+        message: 'Missing permissions to view this channel',
+      });
+      return;
+    }
+
+    client.join(`channel:${data.channelId}`);
+    client.emit('channel:join:ack', {
+      guildId: data.guildId,
+      channelId: data.channelId,
+    });
   }
 
   @SubscribeMessage('heartbeat')
@@ -212,10 +230,23 @@ export class EventsGateway
   ) {
     const { userId } = client.data;
 
+    const canSend = await this.permissionsService.hasPermission(
+      userId,
+      data.guildId,
+      PermissionFlag.SEND_MESSAGES,
+      data.channelId,
+    );
+
+    if (!canSend) {
+      client.emit('error', { message: 'Missing permissions to send messages' });
+      return;
+    }
+
     const message = await this.messagesService.create({
       content: data.content,
       channelId: data.channelId,
-      authorId: userId,
+      authorId: client.data.userId,
+      guildId: data.guildId,
     });
 
     this.server.to(`guild:${data.guildId}`).emit('message:new', {
@@ -235,19 +266,30 @@ export class EventsGateway
   @SubscribeMessage('message:history')
   async handleHistory(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { channelId: string; before?: string },
+    @MessageBody()
+    data: { channelId: string; guildId: string; before?: string },
   ) {
+    const { userId } = client.data;
+
+    const canView = await this.permissionsService.hasPermission(
+      userId,
+      data.guildId,
+      PermissionFlag.VIEW_CHANNEL,
+      data.channelId,
+    );
+
+    if (!canView) {
+      client.emit('error', {
+        message: 'Missing permissions to view this channel',
+      });
+      return;
+    }
+
     const messages = await this.messagesService.findByChannel(
       data.channelId,
       data.before,
     );
 
-    client.emit('message:history', {
-      data: messages.map((m) => ({
-        ...m,
-        createdAt:
-          m.createdAt instanceof Date ? m.createdAt.toISOString() : m.createdAt,
-      })),
-    });
+    client.emit('message:history', { data: messages });
   }
 }

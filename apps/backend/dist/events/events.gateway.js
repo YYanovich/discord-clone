@@ -25,12 +25,15 @@ const common_1 = require("@nestjs/common");
 const ioredis_1 = __importDefault(require("ioredis"));
 const redis_adapter_1 = require("@socket.io/redis-adapter");
 const messages_service_1 = require("../messages/messages.service");
+const permission_service_1 = require("../guilds/permission.service");
+const role_entity_1 = require("../guilds/entities/role.entity");
 let EventsGateway = class EventsGateway {
-    constructor(jwtService, guildsService, redisService, messagesService) {
+    constructor(jwtService, guildsService, redisService, messagesService, permissionsService) {
         this.jwtService = jwtService;
         this.guildsService = guildsService;
         this.redisService = redisService;
         this.messagesService = messagesService;
+        this.permissionsService = permissionsService;
         this.logger = new common_1.Logger('EventsGateway');
         this.userSockets = new Map();
     }
@@ -112,12 +115,20 @@ let EventsGateway = class EventsGateway {
             }
         }
     }
-    handleChannelJoin(client, data) {
-        client.join(`guild:${data.guildId}`);
-        return {
-            event: 'channel:join:ack',
-            data: { guildId: data.guildId, channelId: data.channelId },
-        };
+    async handleChannelJoin(client, data) {
+        const { userId } = client.data;
+        const canView = await this.permissionsService.hasPermission(userId, data.guildId, role_entity_1.PermissionFlag.VIEW_CHANNEL, data.channelId);
+        if (!canView) {
+            client.emit('error', {
+                message: 'Missing permissions to view this channel',
+            });
+            return;
+        }
+        client.join(`channel:${data.channelId}`);
+        client.emit('channel:join:ack', {
+            guildId: data.guildId,
+            channelId: data.channelId,
+        });
     }
     async handleHeartbeat(client) {
         const { userId, sessionId } = client.data;
@@ -143,10 +154,16 @@ let EventsGateway = class EventsGateway {
     }
     async handleMessage(client, data) {
         const { userId } = client.data;
+        const canSend = await this.permissionsService.hasPermission(userId, data.guildId, role_entity_1.PermissionFlag.SEND_MESSAGES, data.channelId);
+        if (!canSend) {
+            client.emit('error', { message: 'Missing permissions to send messages' });
+            return;
+        }
         const message = await this.messagesService.create({
             content: data.content,
             channelId: data.channelId,
-            authorId: userId,
+            authorId: client.data.userId,
+            guildId: data.guildId,
         });
         this.server.to(`guild:${data.guildId}`).emit('message:new', {
             id: message.id,
@@ -160,13 +177,16 @@ let EventsGateway = class EventsGateway {
         return { event: 'message:ack', data: { id: message.id } };
     }
     async handleHistory(client, data) {
+        const { userId } = client.data;
+        const canView = await this.permissionsService.hasPermission(userId, data.guildId, role_entity_1.PermissionFlag.VIEW_CHANNEL, data.channelId);
+        if (!canView) {
+            client.emit('error', {
+                message: 'Missing permissions to view this channel',
+            });
+            return;
+        }
         const messages = await this.messagesService.findByChannel(data.channelId, data.before);
-        client.emit('message:history', {
-            data: messages.map((m) => ({
-                ...m,
-                createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : m.createdAt,
-            })),
-        });
+        client.emit('message:history', { data: messages });
     }
 };
 exports.EventsGateway = EventsGateway;
@@ -188,7 +208,7 @@ __decorate([
     __param(1, (0, websockets_1.MessageBody)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [socket_io_1.Socket, Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], EventsGateway.prototype, "handleChannelJoin", null);
 __decorate([
     (0, websockets_1.SubscribeMessage)('heartbeat'),
@@ -239,6 +259,7 @@ exports.EventsGateway = EventsGateway = __decorate([
     __metadata("design:paramtypes", [jwt_1.JwtService,
         guilds_service_1.GuildsService,
         redis_service_1.RedisService,
-        messages_service_1.MessagesService])
+        messages_service_1.MessagesService,
+        permission_service_1.PermissionsService])
 ], EventsGateway);
 //# sourceMappingURL=events.gateway.js.map

@@ -55,22 +55,43 @@ const channel_entity_1 = require("./entities/channel.entity");
 const membership_entity_1 = require("./entities/membership.entity");
 const invite_entity_1 = require("./entities/invite.entity");
 const crypto = __importStar(require("crypto"));
+const role_entity_1 = require("./entities/role.entity");
+const member_role_entity_1 = require("./entities/member-role.entity");
+const ban_entity_1 = require("./entities/ban.entity");
+const channel_overwrite_entity_1 = require("./entities/channel-overwrite.entity");
 let GuildsService = class GuildsService {
-    constructor(guildRepo, categoryRepo, channelRepo, membershipRepo, inviteRepo) {
+    constructor(guildRepo, categoryRepo, channelRepo, membershipRepo, inviteRepo, roleRepo, memberRoleRepo, banRepo, overwriteRepo) {
         this.guildRepo = guildRepo;
         this.categoryRepo = categoryRepo;
         this.channelRepo = channelRepo;
         this.membershipRepo = membershipRepo;
         this.inviteRepo = inviteRepo;
+        this.roleRepo = roleRepo;
+        this.memberRoleRepo = memberRoleRepo;
+        this.banRepo = banRepo;
+        this.overwriteRepo = overwriteRepo;
     }
     async createGuild(name, ownerId) {
         const guild = this.guildRepo.create({ name, ownerId });
         const saved = await this.guildRepo.save(guild);
+        const everyoneRole = this.roleRepo.create({
+            name: '@everyone',
+            guildId: saved.id,
+            position: 0,
+            permissions: role_entity_1.PermissionFlag.VIEW_CHANNEL | role_entity_1.PermissionFlag.SEND_MESSAGES,
+        });
+        await this.roleRepo.save(everyoneRole);
         const membership = this.membershipRepo.create({
             userId: ownerId,
             guildId: saved.id,
         });
         await this.membershipRepo.save(membership);
+        const memberRole = this.memberRoleRepo.create({
+            userId: ownerId,
+            roleId: everyoneRole.id,
+            guildId: saved.id,
+        });
+        await this.memberRoleRepo.save(memberRole);
         const defaultChannel = this.channelRepo.create({
             name: 'general',
             type: channel_entity_1.ChannelType.TEXT,
@@ -132,10 +153,7 @@ let GuildsService = class GuildsService {
         return this.inviteRepo.save(invite);
     }
     async joinByInvite(code, userId) {
-        const invite = await this.inviteRepo.findOne({
-            where: { code },
-            relations: { guild: true },
-        });
+        const invite = await this.inviteRepo.findOne({ where: { code } });
         if (!invite)
             throw new common_1.NotFoundException('Invalid invite code');
         if (invite.expiresAt && new Date() > invite.expiresAt) {
@@ -144,8 +162,20 @@ let GuildsService = class GuildsService {
         if (invite.maxUses !== null && invite.uses >= invite.maxUses) {
             throw new common_1.ForbiddenException('Invite link has reached its maximum uses');
         }
+        const ban = await this.banRepo.findOne({
+            where: { guildId: invite.guildId, userId },
+        });
+        if (ban)
+            throw new common_1.ForbiddenException('You are banned from this server');
         await this.joinGuild(invite.guildId, userId);
         await this.inviteRepo.update({ id: invite.id }, { uses: invite.uses + 1 });
+    }
+    async getInvites(guildId, userId) {
+        await this.assertMembership(guildId, userId);
+        return this.inviteRepo.find({
+            where: { guildId },
+            order: { createdAt: 'DESC' },
+        });
     }
     async joinGuild(guildId, userId) {
         const guild = await this.guildRepo.findOne({ where: { id: guildId } });
@@ -158,6 +188,17 @@ let GuildsService = class GuildsService {
             return;
         const membership = this.membershipRepo.create({ userId, guildId });
         await this.membershipRepo.save(membership);
+        const everyoneRole = await this.roleRepo.findOne({
+            where: { guildId, name: '@everyone' },
+        });
+        if (everyoneRole) {
+            const memberRole = this.memberRoleRepo.create({
+                userId,
+                roleId: everyoneRole.id,
+                guildId,
+            });
+            await this.memberRoleRepo.save(memberRole);
+        }
     }
     async leaveGuild(guildId, userId) {
         const guild = await this.guildRepo.findOne({ where: { id: guildId } });
@@ -194,6 +235,53 @@ let GuildsService = class GuildsService {
             throw new common_1.ForbiddenException('You are not a member of this guild');
         }
     }
+    async getRoles(guildId) {
+        return this.roleRepo.find({
+            where: { guildId },
+            order: { position: 'DESC' },
+        });
+    }
+    async createRole(guildId, userId, dto) {
+        await this.assertOwnership(guildId, userId);
+        const role = this.roleRepo.create({ ...dto, guildId });
+        return this.roleRepo.save(role);
+    }
+    async updateRole(guildId, roleId, userId, dto) {
+        await this.assertOwnership(guildId, userId);
+        await this.roleRepo.update({ id: roleId, guildId }, dto);
+        return this.roleRepo.findOne({ where: { id: roleId } });
+    }
+    async deleteRole(guildId, roleId, userId) {
+        await this.assertOwnership(guildId, userId);
+        await this.roleRepo.delete({ id: roleId, guildId });
+    }
+    async assignRole(guildId, roleId, targetUserId) {
+        const existing = await this.memberRoleRepo.findOne({
+            where: { userId: targetUserId, roleId, guildId },
+        });
+        if (existing)
+            return;
+        await this.memberRoleRepo.save(this.memberRoleRepo.create({ userId: targetUserId, roleId, guildId }));
+    }
+    async removeRole(guildId, roleId, targetUserId) {
+        await this.memberRoleRepo.delete({ userId: targetUserId, roleId, guildId });
+    }
+    async kickMember(guildId, targetId, executorId) {
+        const guild = await this.guildRepo.findOne({ where: { id: guildId } });
+        if (guild?.ownerId === targetId) {
+            throw new common_1.ForbiddenException('Cannot kick the guild owner');
+        }
+        await this.membershipRepo.delete({ guildId, userId: targetId });
+    }
+    async banMember(guildId, targetId, executorId) {
+        const guild = await this.guildRepo.findOne({ where: { id: guildId } });
+        if (guild?.ownerId === targetId) {
+            throw new common_1.ForbiddenException('Cannot ban the guild owner');
+        }
+        await this.membershipRepo.delete({ guildId, userId: targetId });
+        const ban = this.banRepo.create({ guildId, userId: targetId });
+        await this.banRepo.save(ban);
+    }
     async assertOwnership(guildId, userId) {
         const guild = await this.guildRepo.findOne({ where: { id: guildId } });
         if (!guild)
@@ -202,6 +290,32 @@ let GuildsService = class GuildsService {
             throw new common_1.ForbiddenException('Only the owner can perform this action');
         }
         return guild;
+    }
+    async setChannelOverwrite(channelId, targetId, type, allow, deny) {
+        const existing = await this.overwriteRepo.findOne({
+            where: type === 'role'
+                ? { channelId, roleId: targetId }
+                : { channelId, userId: targetId },
+        });
+        if (existing) {
+            await this.overwriteRepo.update(existing.id, { allow, deny });
+            return this.overwriteRepo.findOne({
+                where: { id: existing.id },
+            });
+        }
+        const overwrite = this.overwriteRepo.create({
+            channelId,
+            allow,
+            deny,
+            roleId: type === 'role' ? targetId : null,
+            userId: type === 'user' ? targetId : null,
+        });
+        return this.overwriteRepo.save(overwrite);
+    }
+    async deleteChannelOverwrite(channelId, targetId, type) {
+        await this.overwriteRepo.delete(type === 'role'
+            ? { channelId, roleId: targetId }
+            : { channelId, userId: targetId });
     }
 };
 exports.GuildsService = GuildsService;
@@ -212,7 +326,15 @@ exports.GuildsService = GuildsService = __decorate([
     __param(2, (0, typeorm_1.InjectRepository)(channel_entity_1.Channel)),
     __param(3, (0, typeorm_1.InjectRepository)(membership_entity_1.Membership)),
     __param(4, (0, typeorm_1.InjectRepository)(invite_entity_1.Invite)),
+    __param(5, (0, typeorm_1.InjectRepository)(role_entity_1.Role)),
+    __param(6, (0, typeorm_1.InjectRepository)(member_role_entity_1.MemberRole)),
+    __param(7, (0, typeorm_1.InjectRepository)(ban_entity_1.Ban)),
+    __param(8, (0, typeorm_1.InjectRepository)(channel_overwrite_entity_1.ChannelOverwrite)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,

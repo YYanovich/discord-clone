@@ -17,13 +17,31 @@ const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const message_entity_1 = require("./entities/message.entity");
+const outbox_service_1 = require("../outbox/outbox.service");
 let MessagesService = class MessagesService {
-    constructor(messageRepo) {
+    constructor(messageRepo, outboxService, dataSource) {
         this.messageRepo = messageRepo;
+        this.outboxService = outboxService;
+        this.dataSource = dataSource;
     }
     async create(data) {
-        const message = this.messageRepo.create(data);
-        return this.messageRepo.save(message);
+        return this.dataSource.transaction(async (manager) => {
+            const message = manager.create(message_entity_1.Message, {
+                content: data.content,
+                channelId: data.channelId,
+                authorId: data.authorId,
+            });
+            const saved = await manager.save(message);
+            await this.outboxService.write('messages.created', {
+                messageId: saved.id,
+                content: saved.content,
+                channelId: saved.channelId,
+                guildId: data.guildId,
+                authorId: saved.authorId,
+                createdAt: saved.createdAt.toISOString(),
+            }, manager);
+            return saved;
+        });
     }
     async findByChannel(channelId, before, limit = 50) {
         const query = this.messageRepo
@@ -49,6 +67,9 @@ exports.MessagesService = MessagesService;
 exports.MessagesService = MessagesService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(message_entity_1.Message)),
-    __metadata("design:paramtypes", [typeorm_2.Repository])
+    __param(2, (0, typeorm_1.InjectDataSource)()),
+    __metadata("design:paramtypes", [typeorm_2.Repository,
+        outbox_service_1.OutboxService,
+        typeorm_2.DataSource])
 ], MessagesService);
 //# sourceMappingURL=messages.service.js.map

@@ -35,15 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppDataSource = void 0;
 const typeorm_1 = require("typeorm");
-const user_entity_1 = require("./users/entities/user.entity");
-const session_entity_1 = require("./users/entities/session.entity");
 const dotenv = __importStar(require("dotenv"));
-const guild_entity_1 = require("./guilds/entities/guild.entity");
-const category_entity_1 = require("./guilds/entities/category.entity");
-const channel_entity_1 = require("./guilds/entities/channel.entity");
-const membership_entity_1 = require("./guilds/entities/membership.entity");
-const invite_entity_1 = require("./guilds/entities/invite.entity");
-const message_entity_1 = require("./messages/entities/message.entity");
 dotenv.config();
 exports.AppDataSource = new typeorm_1.DataSource({
     type: 'postgres',
@@ -52,16 +44,7 @@ exports.AppDataSource = new typeorm_1.DataSource({
     username: process.env.DB_USER ?? 'discord',
     password: process.env.DB_PASS ?? 'secret',
     database: process.env.DB_NAME ?? 'discord',
-    entities: [
-        user_entity_1.User,
-        session_entity_1.Session,
-        guild_entity_1.Guild,
-        category_entity_1.Category,
-        channel_entity_1.Channel,
-        membership_entity_1.Membership,
-        invite_entity_1.Invite,
-        message_entity_1.Message,
-    ],
+    entities: [__dirname + '/**/*.entity{.ts,.js}'],
     migrations: ['src/migrations/*.ts'],
     synchronize: false,
 });

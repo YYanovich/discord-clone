@@ -20,7 +20,8 @@ const guilds_service_1 = require("./guilds.service");
 const create_guild_dto_1 = require("./dto/create-guild.dto");
 const create_channel_dto_1 = require("./dto/create-channel.dto");
 const create_category_dto_1 = require("./dto/create-category.dto");
-const create_invite_dto_1 = require("./dto/create-invite.dto");
+const permissions_guard_1 = require("./guards/permissions.guard");
+const role_entity_1 = require("./entities/role.entity");
 let GuildsController = class GuildsController {
     constructor(guildsService) {
         this.guildsService = guildsService;
@@ -46,11 +47,23 @@ let GuildsController = class GuildsController {
     createCategory(guildId, dto, user) {
         return this.guildsService.createCategory(guildId, user.userId, dto.name);
     }
-    createInvite(guildId, dto, user) {
-        return this.guildsService.createInvite(guildId, user.userId, dto);
+    getInvites(guildId, user) {
+        return this.guildsService.getInvites(guildId, user.userId);
     }
     leaveGuild(guildId, user) {
         return this.guildsService.leaveGuild(guildId, user.userId);
+    }
+    kickMember(guildId, targetUserId, user) {
+        return this.guildsService.kickMember(guildId, targetUserId, user.userId);
+    }
+    banMember(guildId, targetUserId, user) {
+        return this.guildsService.banMember(guildId, targetUserId, user.userId);
+    }
+    async setChannelOverwrite(guildId, channelId, targetId, dto, user) {
+        return this.guildsService.setChannelOverwrite(channelId, targetId, dto.type, dto.allow, dto.deny);
+    }
+    async deleteChannelOverwrite(channelId, targetId, dto) {
+        return this.guildsService.deleteChannelOverwrite(channelId, targetId, dto.type);
     }
 };
 exports.GuildsController = GuildsController;
@@ -95,6 +108,8 @@ __decorate([
 ], GuildsController.prototype, "getMembers", null);
 __decorate([
     (0, common_1.Post)(':id/channels'),
+    (0, common_1.UseGuards)(permissions_guard_1.PermissionsGuard),
+    (0, permissions_guard_1.RequirePermission)(role_entity_1.PermissionFlag.MANAGE_CHANNELS),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -112,14 +127,15 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], GuildsController.prototype, "createCategory", null);
 __decorate([
-    (0, common_1.Post)(':id/invite'),
+    (0, common_1.Get)(':id/invites'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, permissions_guard_1.PermissionsGuard),
+    (0, permissions_guard_1.RequirePermission)(role_entity_1.PermissionFlag.MANAGE_CHANNELS),
     __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, create_invite_dto_1.CreateInviteDto, Object]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
-], GuildsController.prototype, "createInvite", null);
+], GuildsController.prototype, "getInvites", null);
 __decorate([
     (0, common_1.Delete)(':id/leave'),
     __param(0, (0, common_1.Param)('id')),
@@ -128,6 +144,52 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], GuildsController.prototype, "leaveGuild", null);
+__decorate([
+    (0, common_1.Delete)(':id/members/:userId/kick'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, permissions_guard_1.PermissionsGuard),
+    (0, permissions_guard_1.RequirePermission)(role_entity_1.PermissionFlag.KICK_MEMBERS),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", void 0)
+], GuildsController.prototype, "kickMember", null);
+__decorate([
+    (0, common_1.Post)(':id/members/:userId/ban'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, permissions_guard_1.PermissionsGuard),
+    (0, permissions_guard_1.RequirePermission)(role_entity_1.PermissionFlag.BAN_MEMBERS),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", void 0)
+], GuildsController.prototype, "banMember", null);
+__decorate([
+    (0, common_1.Put)(':id/channels/:channelId/permissions/:targetId'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, permissions_guard_1.PermissionsGuard),
+    (0, permissions_guard_1.RequirePermission)(role_entity_1.PermissionFlag.MANAGE_CHANNELS),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('channelId')),
+    __param(2, (0, common_1.Param)('targetId')),
+    __param(3, (0, common_1.Body)()),
+    __param(4, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], GuildsController.prototype, "setChannelOverwrite", null);
+__decorate([
+    (0, common_1.Delete)(':id/channels/:channelId/permissions/:targetId'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, permissions_guard_1.PermissionsGuard),
+    (0, permissions_guard_1.RequirePermission)(role_entity_1.PermissionFlag.MANAGE_CHANNELS),
+    __param(0, (0, common_1.Param)('channelId')),
+    __param(1, (0, common_1.Param)('targetId')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], GuildsController.prototype, "deleteChannelOverwrite", null);
 exports.GuildsController = GuildsController = __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Controller)('guilds'),

@@ -46,7 +46,7 @@ type PresenceMap = Record<string, "online" | "offline">;
 type MessageMap = Record<string, IMessage[]>;
 type MemberMap = Record<string, IMember[]>;
 
-const MESSAGE_CACHE_LIMIT = 10;
+const MESSAGE_CACHE_LIMIT = 50;
 
 interface FullCache {
   activeGuildId: string | null;
