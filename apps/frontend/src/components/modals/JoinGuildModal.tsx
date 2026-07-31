@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "../../api/axios";
-import { useGuildStore } from "../../store/guildStore";
+import { toast } from "sonner";
+import type { AxiosError } from "axios";
 
 interface Props {
   onClose: () => void;
@@ -9,20 +10,21 @@ interface Props {
 export default function JoinGuildModal({ onClose }: Props) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const handleJoin = async () => {
     if (!code.trim()) return;
+
     setLoading(true);
-    setError("");
     try {
       await api.post(`/guilds/join/${code.trim()}`);
-      const { data } = await api.get("/guilds");
-      useGuildStore.getState().setGuilds(data);
+      toast.success("Successfully joined the server!");
       onClose();
-    } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { message?: string } } };
-      setError(axiosError.response?.data?.message ?? "Invalid invite code");
+    } catch (err) {
+      const axiosError = err as AxiosError<{ message?: string }>;
+      const errorMessage =
+        axiosError.response?.data?.message ?? "Invalid or expired invite code";
+
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -35,11 +37,6 @@ export default function JoinGuildModal({ onClose }: Props) {
           Join by code
         </h2>
 
-        {error && (
-          <p className="text-red-400 text-xs mb-3 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl font-medium">
-            {error}
-          </p>
-        )}
 
         <input
           type="text"

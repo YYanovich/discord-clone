@@ -20,7 +20,7 @@ exports.EventsModule = EventsModule = __decorate([
     (0, common_1.Module)({
         imports: [
             guilds_module_1.GuildsModule,
-            messages_module_1.MessagesModule,
+            (0, common_1.forwardRef)(() => messages_module_1.MessagesModule),
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],

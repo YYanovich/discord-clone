@@ -20,11 +20,14 @@ const guilds_service_1 = require("./guilds.service");
 const create_guild_dto_1 = require("./dto/create-guild.dto");
 const create_channel_dto_1 = require("./dto/create-channel.dto");
 const create_category_dto_1 = require("./dto/create-category.dto");
+const create_invite_dto_1 = require("./dto/create-invite.dto");
 const permissions_guard_1 = require("./guards/permissions.guard");
 const role_entity_1 = require("./entities/role.entity");
+const permission_service_1 = require("./permission.service");
 let GuildsController = class GuildsController {
-    constructor(guildsService) {
+    constructor(guildsService, permissionsService) {
         this.guildsService = guildsService;
+        this.permissionsService = permissionsService;
     }
     createGuild(dto, user) {
         return this.guildsService.createGuild(dto.name, user.userId);
@@ -50,6 +53,9 @@ let GuildsController = class GuildsController {
     getInvites(guildId, user) {
         return this.guildsService.getInvites(guildId, user.userId);
     }
+    createInvite(guildId, dto, user) {
+        return this.guildsService.createInvite(guildId, user.userId, dto);
+    }
     leaveGuild(guildId, user) {
         return this.guildsService.leaveGuild(guildId, user.userId);
     }
@@ -64,6 +70,10 @@ let GuildsController = class GuildsController {
     }
     async deleteChannelOverwrite(channelId, targetId, dto) {
         return this.guildsService.deleteChannelOverwrite(channelId, targetId, dto.type);
+    }
+    async getMyPermissions(guildId, channelId, user) {
+        const permissions = await this.permissionsService.computePermissions(user.userId, guildId, channelId);
+        return { permissions };
     }
 };
 exports.GuildsController = GuildsController;
@@ -137,6 +147,17 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], GuildsController.prototype, "getInvites", null);
 __decorate([
+    (0, common_1.Post)(':id/invites'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, permissions_guard_1.PermissionsGuard),
+    (0, permissions_guard_1.RequirePermission)(role_entity_1.PermissionFlag.MANAGE_CHANNELS),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, create_invite_dto_1.CreateInviteDto, Object]),
+    __metadata("design:returntype", void 0)
+], GuildsController.prototype, "createInvite", null);
+__decorate([
     (0, common_1.Delete)(':id/leave'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
@@ -190,9 +211,20 @@ __decorate([
     __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], GuildsController.prototype, "deleteChannelOverwrite", null);
+__decorate([
+    (0, common_1.Get)(':id/my-permissions'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Query)('channelId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], GuildsController.prototype, "getMyPermissions", null);
 exports.GuildsController = GuildsController = __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Controller)('guilds'),
-    __metadata("design:paramtypes", [guilds_service_1.GuildsService])
+    __metadata("design:paramtypes", [guilds_service_1.GuildsService,
+        permission_service_1.PermissionsService])
 ], GuildsController);
 //# sourceMappingURL=guilds.controller.js.map

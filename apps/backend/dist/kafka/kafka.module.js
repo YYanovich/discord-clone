@@ -25,8 +25,15 @@ exports.KafkaModule = KafkaModule = __decorate([
                             clientId: 'discord-clone',
                             brokers: [process.env.KAFKA_BROKER ?? 'localhost:9092'],
                         },
+                        consumer: {
+                            groupId: 'discord-clone-client-group',
+                            allowAutoTopicCreation: true,
+                        },
                         producer: {
                             allowAutoTopicCreation: true,
+                        },
+                        subscribe: {
+                            fromBeginning: false,
                         },
                     },
                 },

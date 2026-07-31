@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Message } from './entities/message.entity';
@@ -66,10 +70,24 @@ export class MessagesService {
   }
 
   async softDelete(messageId: string, userId: string): Promise<void> {
-    await this.messageRepo.update(
-      { id: messageId, authorId: userId },
-      { isDeleted: true },
-    );
+    const message = await this.messageRepo.findOne({
+      where: { id: messageId },
+    });
+    if (!message) throw new NotFoundException('Message not found');
+    if (message.authorId !== userId)
+      throw new ForbiddenException('Not allowed');
+
+    message.isDeleted = true;
+    await this.messageRepo.save(message);
+
+    try {
+      await this.outboxService.write('messages.deleted', {
+        messageId: message.id,
+        channelId: message.channelId,
+      });
+    } catch (err) {
+      console.error('Outbox write failed, but DB updated:', err);
+    }
   }
 
   async edit(
@@ -77,9 +95,24 @@ export class MessagesService {
     userId: string,
     content: string,
   ): Promise<void> {
-    await this.messageRepo.update(
-      { id: messageId, authorId: userId },
-      { content, editedAt: new Date() },
-    );
+    const message = await this.messageRepo.findOne({
+      where: { id: messageId },
+    });
+    if (!message) throw new NotFoundException('Message not found');
+    if (message.authorId !== userId)
+      throw new ForbiddenException('Not allowed');
+
+    message.content = content;
+    message.editedAt = new Date();
+    await this.messageRepo.save(message);
+
+    try {
+      await this.outboxService.write('messages.updated', {
+        messageId: message.id,
+        content: message.content,
+      });
+    } catch (err) {
+      console.error('Outbox write failed, but DB updated:', err);
+    }
   }
 }

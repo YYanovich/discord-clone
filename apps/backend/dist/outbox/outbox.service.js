@@ -41,7 +41,10 @@ let OutboxService = class OutboxService {
         this.isPublishing = true;
         try {
             const events = await this.outboxRepo.find({
-                where: { status: outbox_entity_1.OutboxStatus.PENDING },
+                where: [
+                    { status: outbox_entity_1.OutboxStatus.PENDING },
+                    { status: outbox_entity_1.OutboxStatus.FAILED },
+                ],
                 order: { createdAt: 'ASC' },
                 take: 100,
             });
@@ -50,13 +53,15 @@ let OutboxService = class OutboxService {
                     await this.kafkaClient
                         .emit(event.topic, {
                         key: event.id,
-                        value: JSON.stringify(event.payload),
+                        value: event.payload,
                     })
                         .toPromise();
                     await this.outboxRepo.update(event.id, {
                         status: outbox_entity_1.OutboxStatus.PUBLISHED,
                         publishedAt: new Date(),
+                        errorMessage: null,
                     });
+                    this.logger.log(`Successfully published outbox event ${event.id} to ${event.topic}`);
                 }
                 catch (err) {
                     this.logger.error(`Failed to publish outbox event ${event.id}:`, err);

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import api from "../../api/axios";
+import { toast } from "sonner";
+import { AxiosError } from "axios";
 
 interface Props {
   guildId: string;
@@ -16,18 +18,23 @@ interface IInvite {
 export default function InviteModal({ guildId, onClose }: Props) {
   const [invite, setInvite] = useState<IInvite | null>(null);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [expiresInHours, setExpiresInHours] = useState<number | null>(24);
   const [maxUses, setMaxUses] = useState<number | null>(null);
 
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      const { data } = await api.post<IInvite>(`/guilds/${guildId}/invite`, {
+      const { data } = await api.post<IInvite>(`/guilds/${guildId}/invites`, {
         expiresInHours,
         maxUses,
       });
       setInvite(data);
+      toast.success("Invite link generated successfully!");
+    } catch (err) {
+      const axiosError = err as AxiosError<{ message?: string }>;
+      const msg =
+        axiosError.response?.data?.message ?? "Failed to generate invite link";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -36,18 +43,20 @@ export default function InviteModal({ guildId, onClose }: Props) {
   const handleCopy = () => {
     if (!invite) return;
     navigator.clipboard.writeText(invite.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    toast.success("Invite code copied to clipboard!");
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
         <h2 className="text-zinc-100 font-semibold text-lg mb-1">
           Invite People
         </h2>
-        <p className="text-zinc-500 text-sm mb-5">
-          Share an invite code to let others join
+        <p className="text-zinc-400 text-sm mb-5">
+          Share an invite code to let others join this server
         </p>
 
         {!invite ? (
@@ -121,17 +130,17 @@ export default function InviteModal({ guildId, onClose }: Props) {
         ) : (
           <>
             <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-4 mb-4">
-              <p className="text-zinc-500 text-xs mb-2">Invite code</p>
-              <p className="text-zinc-100 font-mono text-lg font-bold tracking-widest">
+              <p className="text-zinc-500 text-xs mb-1">Invite code</p>
+              <p className="text-zinc-100 font-mono text-xl font-bold tracking-widest select-all">
                 {invite.code}
               </p>
               {invite.expiresAt && (
-                <p className="text-zinc-600 text-xs mt-2">
+                <p className="text-zinc-500 text-xs mt-2">
                   Expires: {new Date(invite.expiresAt).toLocaleString()}
                 </p>
               )}
               {invite.maxUses && (
-                <p className="text-zinc-600 text-xs">
+                <p className="text-zinc-500 text-xs">
                   Max uses: {invite.maxUses}
                 </p>
               )}
@@ -146,13 +155,9 @@ export default function InviteModal({ guildId, onClose }: Props) {
               </button>
               <button
                 onClick={handleCopy}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  copied
-                    ? "bg-green-600 text-white"
-                    : "bg-indigo-600 hover:bg-indigo-500 text-white"
-                }`}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition-all"
               >
-                {copied ? "Copied!" : "Copy Code"}
+                Copy Code
               </button>
             </div>
 

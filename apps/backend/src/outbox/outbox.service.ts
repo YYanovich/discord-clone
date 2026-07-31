@@ -39,7 +39,10 @@ export class OutboxService implements OnModuleInit {
 
     try {
       const events = await this.outboxRepo.find({
-        where: { status: OutboxStatus.PENDING },
+        where: [
+          { status: OutboxStatus.PENDING },
+          { status: OutboxStatus.FAILED },
+        ],
         order: { createdAt: 'ASC' },
         take: 100,
       });
@@ -49,14 +52,17 @@ export class OutboxService implements OnModuleInit {
           await this.kafkaClient
             .emit(event.topic, {
               key: event.id,
-              value: JSON.stringify(event.payload),
+              value: event.payload,
             })
             .toPromise();
 
           await this.outboxRepo.update(event.id, {
             status: OutboxStatus.PUBLISHED,
             publishedAt: new Date(),
+            errorMessage: null,
           });
+
+          this.logger.log(`Successfully published outbox event ${event.id} to ${event.topic}`);
         } catch (err) {
           this.logger.error(`Failed to publish outbox event ${event.id}:`, err);
           await this.outboxRepo.update(event.id, {

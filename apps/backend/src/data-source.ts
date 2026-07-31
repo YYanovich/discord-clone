@@ -10,7 +10,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USER ?? 'discord',
   password: process.env.DB_PASS ?? 'secret',
   database: process.env.DB_NAME ?? 'discord',
-  entities: [__dirname + '/**/*.entity{.ts,.js}'],
+  entities: ['src/**/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
 });

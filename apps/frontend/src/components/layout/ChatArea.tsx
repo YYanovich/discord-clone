@@ -1,37 +1,56 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { RefObject } from "react";
 import type { Socket } from "socket.io-client";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useGuildStore } from "../../store/guildStore";
 import { useAuthStore } from "../../store/authStore";
+import { MessageItem } from "./MessageItem";
+import { MessageInput } from "./MessageInput";
 import type { IMessage } from "../../store/guildStore";
+import SearchModal from "../modals/SearchModal";
 
-interface Props {
+interface IChatArea {
   socketRef: RefObject<Socket | null>;
 }
 
-export default function ChatArea({ socketRef }: Props) {
+const MESSAGES_PER_PAGE = 50;
+
+export default function ChatArea({ socketRef }: IChatArea) {
   const {
-    activeGuildId,
     activeChannelId,
+    activeGuildId,
     messages,
-    members,
     typingUsers,
     addMessage,
     setMessages,
+    prependMessages,
+    members,
     guilds,
+    setHasMore,
+    setLoadingMore,
+    hasMoreMessages,
+    isLoadingMore,
   } = useGuildStore();
   const { user } = useAuthStore();
 
-  const [input, setInput] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+
+  const [firstItemIndex, setFirstItemIndex] = useState(100000);
+  const [showSearch, setShowSearch] = useState(false);
+
+  const isLoadingHistoryRef = useRef(false);
 
   useEffect(() => {
     if (!activeChannelId) return;
     let cancelled = false;
+    let historyHandler: ((payload: { data: IMessage[] }) => void) | null = null;
     let retryTimer: ReturnType<typeof setInterval> | null = null;
-    let historyHandler:
-      ((payload: { data?: IMessage[] } | IMessage[]) => void) | null = null;
+
+    const cached = useGuildStore.getState().messagesByChannel[activeChannelId];
+    if (cached && cached.length > 0) {
+      setHasMore(activeChannelId, true);
+      return;
+    }
 
     const requestHistory = () => {
       const socket = socketRef.current;
@@ -39,16 +58,18 @@ export default function ChatArea({ socketRef }: Props) {
 
       if (historyHandler) socket.off("message:history", historyHandler);
 
-      historyHandler = (payload: { data?: IMessage[] } | IMessage[]) => {
+      historyHandler = (payload: { data: IMessage[] }) => {
         if (cancelled) return;
-        const raw = Array.isArray(payload)
-          ? payload
-          : ((payload as { data?: IMessage[] }).data ?? []);
-        setMessages(activeChannelId, raw);
+        const msgs = payload.data ?? [];
+        setMessages(activeChannelId, msgs);
+        setHasMore(activeChannelId, msgs.length === MESSAGES_PER_PAGE);
       };
 
       socket.once("message:history", historyHandler);
-      socket.emit("message:history", { channelId: activeChannelId });
+      socket.emit("message:history", {
+        channelId: activeChannelId,
+        guildId: activeGuildId,
+      });
       return true;
     };
 
@@ -63,86 +84,62 @@ export default function ChatArea({ socketRef }: Props) {
 
     const socket = socketRef.current;
     const onConnect = () => {
-      if (cancelled) return;
-      if (retryTimer) {
-        clearInterval(retryTimer);
-        retryTimer = null;
-      }
-      requestHistory();
+      if (!cancelled) requestHistory();
     };
     socket?.on("connect", onConnect);
 
     return () => {
       cancelled = true;
       if (retryTimer) clearInterval(retryTimer);
-      const s = socketRef.current;
-      if (s) {
-        if (historyHandler) s.off("message:history", historyHandler);
-        s.off("connect", onConnect);
-      }
+      if (socket && historyHandler)
+        socket.off("message:history", historyHandler);
+      socket?.off("connect", onConnect);
     };
-  }, [activeChannelId, socketRef]);
+  }, [activeChannelId]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  const loadMore = useCallback(async () => {
+    if (!activeChannelId || !activeGuildId) return;
+    if (isLoadingMore[activeChannelId]) return;
+    if (!hasMoreMessages[activeChannelId]) return;
+    if (isLoadingHistoryRef.current) return;
 
-  const handleSend = () => {
-    const trimmed = input.trim();
-    if (!trimmed || !activeChannelId || !activeGuildId || !user) return;
+    const currentMessages =
+      useGuildStore.getState().messagesByChannel[activeChannelId] ?? [];
+    if (currentMessages.length === 0) return;
+
+    isLoadingHistoryRef.current = true;
+    setLoadingMore(activeChannelId, true);
 
     const socket = socketRef.current;
-    if (!socket?.connected) return;
-
-    const optimistic = {
-      id: `temp-${Date.now()}`,
-      content: trimmed,
-      channelId: activeChannelId,
-      authorId: user.id,
-      createdAt: new Date().toISOString(),
-    };
-    addMessage(optimistic);
-    setInput("");
-
-    socket.emit("message:send", {
-      channelId: activeChannelId,
-      guildId: activeGuildId,
-      content: trimmed,
-    });
-
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    socket.emit("typing:stop", {
-      channelId: activeChannelId,
-      guildId: activeGuildId,
-    });
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    if (!socket?.connected) {
+      setLoadingMore(activeChannelId, false);
+      isLoadingHistoryRef.current = false;
+      return;
     }
-  };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInput(e.target.value);
+    const oldest = currentMessages[0];
 
-    const socket = socketRef.current;
-    if (!socket?.connected || !activeGuildId || !activeChannelId) return;
+    return new Promise<void>((resolve) => {
+      const handler = (payload: { data: IMessage[] }) => {
+        const older = payload.data ?? [];
+        if (older.length > 0) {
+          setFirstItemIndex((prev) => prev - older.length);
+          prependMessages(activeChannelId, older);
+        }
+        setHasMore(activeChannelId, older.length === MESSAGES_PER_PAGE);
+        setLoadingMore(activeChannelId, false);
+        isLoadingHistoryRef.current = false;
+        resolve();
+      };
 
-    socket.emit("typing:start", {
-      channelId: activeChannelId,
-      guildId: activeGuildId,
-    });
-
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      socket.emit("typing:stop", {
+      socket.once("message:history", handler);
+      socket.emit("message:history", {
         channelId: activeChannelId,
         guildId: activeGuildId,
+        before: oldest.createdAt,
       });
-    }, 2000);
-  };
+    });
+  }, [activeChannelId, activeGuildId, hasMoreMessages, isLoadingMore]);
 
   const activeGuild = guilds.find((g) => g.id === activeGuildId);
   const activeChannel = activeGuild?.channels.find(
@@ -151,128 +148,105 @@ export default function ChatArea({ socketRef }: Props) {
 
   const typingNames = typingUsers
     .filter((id) => id !== user?.id)
-    .map((id) => {
-      const member = members.find(
-        (candidate) => candidate.userId === id || candidate.user?.id === id,
-      );
-
-      return member?.user.username;
-    })
+    .map((id) => members.find((m) => m.userId === id)?.user.username)
     .filter((name): name is string => Boolean(name));
+
+  const channelMessages = messages.filter(
+    (m) => m.channelId === activeChannelId,
+  );
 
   if (!activeChannelId) {
     return (
-      <div className="flex-1 bg-zinc-900/40 backdrop-blur-sm flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-zinc-600 text-sm">
-            Select channel to start chatting
-          </p>
-        </div>
+      <div className="flex-1 bg-zinc-900/40 flex items-center justify-center">
+        <p className="text-zinc-500">Choose channel</p>
       </div>
     );
   }
 
   return (
     <div className="flex-1 bg-zinc-900/40 backdrop-blur-sm flex flex-col min-w-0">
-      <div className="px-4 py-3 border-b border-zinc-800/80 flex items-center gap-2 shrink-0">
-        <span className="text-zinc-500 text-sm">#</span>
-        <h3 className="text-zinc-100 font-semibold text-sm">
-          {activeChannel?.name ?? "channel"}
-        </h3>
+      <div
+        className="px-4 py-3 border-b border-zinc-800/80 flex items-center justify-between shrink-0"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-500">#</span>
+          <h3 className="text-zinc-100 font-semibold text-sm">
+            {activeChannel?.name ?? "channel"}
+          </h3>
+        </div>
+        <button
+          onClick={() => setShowSearch(true)}
+          title="Search messages"
+          className="p-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700/50 rounded-lg transition-colors"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4"
+          >
+            <path
+              fillRule="evenodd"
+              d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-0.5">
-        {messages.length === 0 && (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-zinc-600 text-sm">Chat is empty</p>
-          </div>
-        )}
+      {showSearch && activeGuildId && (
+        <SearchModal
+          guildId={activeGuildId}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
 
-        {messages.map((message) => {
-          const isTemp = message.id.startsWith("temp-");
-          const member = members.find(
-            (candidate) =>
-              candidate.userId === message.authorId ||
-              candidate.user?.id === message.authorId,
-          );
-          const username = member?.user.username?.trim() || "User";
-          const avatarLetter = username.charAt(0).toUpperCase() || "?";
-
-          return (
-            <div
-              key={message.id}
-              className={`
-                flex items-start gap-3 py-1.5 px-2 rounded-lg
-                hover:bg-zinc-800/30 group transition-colors
-                ${isTemp ? "opacity-50" : ""}
-              `}
-            >
-              <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">
-                {avatarLetter}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 mb-0.5">
-                  <span className="text-zinc-200 text-sm font-medium">
-                    {username}
-                  </span>
-                  <span className="text-zinc-600 text-[11px]">
-                    {new Date(message.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  {isTemp && (
-                    <span className="text-zinc-600 text-[11px] italic">
-                      sending...
-                    </span>
-                  )}
+      <div className="flex-1 overflow-hidden">
+        <Virtuoso
+          ref={virtuosoRef}
+          className="[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-700/60 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-zinc-600"
+          firstItemIndex={firstItemIndex}
+          initialTopMostItemIndex={channelMessages.length - 1}
+          data={channelMessages}
+          startReached={loadMore}
+          followOutput="smooth"
+          components={{
+            Header: () =>
+              isLoadingMore[activeChannelId ?? ""] ? (
+                <div className="py-4 text-center text-zinc-600 text-sm">
+                  Loading...
                 </div>
-                <p className="text-zinc-300 text-sm leading-relaxed wrap-break-words">
-                  {message.content}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-
-        <div ref={bottomRef} />
+              ) : null,
+          }}
+          itemContent={(_, message) => (
+            <MessageItem
+              key={message.id}
+              message={message}
+              members={members}
+              currentUserId={user?.id ?? ""}
+              socketRef={socketRef}
+              activeGuildId={activeGuildId ?? ""}
+            />
+          )}
+        />
       </div>
 
       <div className="px-4 h-5 flex items-center shrink-0">
         {typingNames.length > 0 && (
           <p className="text-zinc-500 text-xs italic">
-            {typingNames.join(", ")} typing...
+            {typingNames.join(", ")}{" "}
+            {typingNames.length === 1 ? "typing" : "typings"}...
           </p>
         )}
       </div>
 
-      <div className="px-4 pb-4 shrink-0">
-        <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl flex items-center gap-3 px-4 py-3 focus-within:border-zinc-600/80 transition-colors">
-          <input
-            type="text"
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder="Wite message"
-            className="flex-1 bg-transparent text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none min-w-0"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || !socketRef.current?.connected}
-            className="text-zinc-600 hover:text-indigo-400 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors duration-150 shrink-0"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="w-5 h-5"
-            >
-              <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      <MessageInput
+        socketRef={socketRef}
+        activeChannelId={activeChannelId}
+        activeGuildId={activeGuildId ?? ""}
+        currentUser={user}
+        addMessage={addMessage}
+      />
     </div>
   );
 }
