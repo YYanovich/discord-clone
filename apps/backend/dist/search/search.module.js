@@ -18,8 +18,8 @@ exports.SearchModule = SearchModule;
 exports.SearchModule = SearchModule = __decorate([
     (0, common_1.Module)({
         imports: [guilds_module_1.GuildsModule],
-        providers: [elasticsearch_service_1.ElasticsearchService, search_consumer_1.SearchConsumer],
-        controllers: [search_controller_1.SearchController],
+        providers: [elasticsearch_service_1.ElasticsearchService],
+        controllers: [search_controller_1.SearchController, search_consumer_1.SearchConsumer],
         exports: [elasticsearch_service_1.ElasticsearchService],
     })
 ], SearchModule);

@@ -29,6 +29,8 @@ export interface IMessage {
   channelId: string;
   authorId: string;
   createdAt: string;
+  editedAt?: string | null;
+  isDeleted?: boolean;
 }
 
 export interface IMember {
@@ -45,8 +47,10 @@ export interface IMember {
 type PresenceMap = Record<string, "online" | "offline">;
 type MessageMap = Record<string, IMessage[]>;
 type MemberMap = Record<string, IMember[]>;
+type BoolMap = Record<string, boolean>;
 
 const MESSAGE_CACHE_LIMIT = 50;
+const CACHE_KEY = "discord-clone:cache-v1";
 
 interface FullCache {
   activeGuildId: string | null;
@@ -56,16 +60,13 @@ interface FullCache {
   membersByGuild: MemberMap;
 }
 
-const CACHE_KEY = "discord-clone:cache-v1";
-
-const normalizeId = (value: string) => value.trim().toLowerCase();
-
 const pickInitialChannelId = (guild: IGuild | undefined): string | null => {
   if (!guild) return null;
-  const sorted = [...(guild.channels ?? [])].sort((a, b) => {
-    if (a.position !== b.position) return a.position - b.position;
-    return a.name.localeCompare(b.name);
-  });
+  const sorted = [...(guild.channels ?? [])].sort((a, b) =>
+    a.position !== b.position
+      ? a.position - b.position
+      : a.name.localeCompare(b.name),
+  );
   return sorted.find((ch) => ch.type === "TEXT")?.id ?? sorted[0]?.id ?? null;
 };
 
@@ -90,8 +91,7 @@ const trimMessages = (messages: IMessage[]): IMessage[] =>
 const readCache = (): FullCache | null => {
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as FullCache;
+    return raw ? (JSON.parse(raw) as FullCache) : null;
   } catch {
     return null;
   }
@@ -103,15 +103,16 @@ const writeCache = (state: GuildState) => {
     for (const [channelId, msgs] of Object.entries(state.messagesByChannel)) {
       trimmedMessages[channelId] = trimMessages(msgs);
     }
-
-    const cache: FullCache = {
-      activeGuildId: state.activeGuildId,
-      activeChannelId: state.activeChannelId,
-      guilds: state.guilds,
-      messagesByChannel: trimmedMessages,
-      membersByGuild: state.membersByGuild,
-    };
-    window.localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    window.localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        activeGuildId: state.activeGuildId,
+        activeChannelId: state.activeChannelId,
+        guilds: state.guilds,
+        messagesByChannel: trimmedMessages,
+        membersByGuild: state.membersByGuild,
+      }),
+    );
   } catch {}
 };
 
@@ -125,14 +126,21 @@ interface GuildState {
   members: IMember[];
   presence: PresenceMap;
   typingUsers: string[];
+  hasMoreMessages: BoolMap;
+  isLoadingMore: BoolMap;
 
   setGuilds: (guilds: IGuild[]) => void;
   addGuild: (guild: IGuild) => void;
   setActiveGuild: (guildId: string) => void;
   setActiveChannel: (channelId: string) => void;
   setMessages: (channelId: string, messages: IMessage[]) => void;
+  prependMessages: (channelId: string, messages: IMessage[]) => void;
   addMessage: (message: IMessage) => void;
+  updateMessage: (messageId: string, updates: Partial<IMessage>) => void;
+  removeMessage: (messageId: string) => void;
   setMembers: (guildId: string, members: IMember[]) => void;
+  setHasMore: (channelId: string, hasMore: boolean) => void;
+  setLoadingMore: (channelId: string, loading: boolean) => void;
   hydrateFromCache: () => FullCache | null;
   resetSessionState: () => void;
   updatePresence: (userId: string, status: "online" | "offline") => void;
@@ -149,6 +157,8 @@ export const useGuildStore = create<GuildState>((set) => ({
   members: [],
   presence: {},
   typingUsers: [],
+  hasMoreMessages: {},
+  isLoadingMore: {},
 
   setGuilds: (newGuilds) =>
     set((state) => {
@@ -162,18 +172,15 @@ export const useGuildStore = create<GuildState>((set) => ({
           .filter((g) => !state.guilds.some((e) => e.id === g.id))
           .map((g) => mergeGuild(undefined, g)),
       ];
-
       const activeGuild = state.activeGuildId
         ? merged.find((g) => g.id === state.activeGuildId)
         : undefined;
-      const channelStillExists =
-        state.activeChannelId && activeGuild?.channels
-          ? activeGuild.channels.some((ch) => ch.id === state.activeChannelId)
-          : false;
+      const channelStillExists = activeGuild?.channels.some(
+        (ch) => ch.id === state.activeChannelId,
+      );
       const nextChannelId = channelStillExists
         ? state.activeChannelId
         : pickInitialChannelId(activeGuild);
-
       const next = {
         guilds: merged,
         activeChannelId: nextChannelId,
@@ -181,7 +188,6 @@ export const useGuildStore = create<GuildState>((set) => ({
           ? (state.messagesByChannel[nextChannelId] ?? [])
           : [],
       };
-
       writeCache({ ...state, ...next, activeGuildId: state.activeGuildId });
       return next;
     }),
@@ -194,7 +200,6 @@ export const useGuildStore = create<GuildState>((set) => ({
         nextGuildId === safe.id
           ? pickInitialChannelId(safe)
           : state.activeChannelId;
-
       const next = {
         guilds: [...state.guilds, safe],
         activeGuildId: nextGuildId,
@@ -207,7 +212,6 @@ export const useGuildStore = create<GuildState>((set) => ({
             ? (state.membersByGuild[safe.id] ?? [])
             : state.members,
       };
-
       writeCache({ ...state, ...next });
       return next;
     }),
@@ -216,7 +220,6 @@ export const useGuildStore = create<GuildState>((set) => ({
     set((state) => {
       const guild = state.guilds.find((g) => g.id === guildId);
       const nextChannelId = pickInitialChannelId(guild);
-
       const next = {
         activeGuildId: guildId,
         activeChannelId: nextChannelId,
@@ -226,7 +229,6 @@ export const useGuildStore = create<GuildState>((set) => ({
         members: state.membersByGuild[guildId] ?? [],
         typingUsers: [],
       };
-
       writeCache({ ...state, ...next });
       return next;
     }),
@@ -245,18 +247,28 @@ export const useGuildStore = create<GuildState>((set) => ({
     set((state) => {
       const safe = messages ?? [];
       const existing = state.messagesByChannel[channelId] ?? [];
-
       const tempMessages = existing.filter((m) => m.id.startsWith("temp-"));
       const incomingIds = new Set(safe.map((m) => m.id));
       const preservedTemp = tempMessages.filter((m) => !incomingIds.has(m.id));
-
       const merged = [...safe, ...preservedTemp];
-
       const next = {
         messagesByChannel: { ...state.messagesByChannel, [channelId]: merged },
         messages: state.activeChannelId === channelId ? merged : state.messages,
       };
+      writeCache({ ...state, ...next });
+      return next;
+    }),
 
+  prependMessages: (channelId, newMessages) =>
+    set((state) => {
+      const existing = state.messagesByChannel[channelId] ?? [];
+      const existingIds = new Set(existing.map((m) => m.id));
+      const unique = newMessages.filter((m) => !existingIds.has(m.id));
+      const merged = [...unique, ...existing]; 
+      const next = {
+        messagesByChannel: { ...state.messagesByChannel, [channelId]: merged },
+        messages: state.activeChannelId === channelId ? merged : state.messages,
+      };
       writeCache({ ...state, ...next });
       return next;
     }),
@@ -264,8 +276,6 @@ export const useGuildStore = create<GuildState>((set) => ({
   addMessage: (message) =>
     set((state) => {
       const current = state.messagesByChannel[message.channelId] ?? [];
-      const authorNorm = normalizeId(message.authorId);
-
       let next: IMessage[];
       if (message.id.startsWith("temp-")) {
         next = current.some((m) => m.id === message.id)
@@ -273,16 +283,12 @@ export const useGuildStore = create<GuildState>((set) => ({
           : [...current, message];
       } else {
         const filtered = current.filter(
-          (m) =>
-            !(
-              m.id.startsWith("temp-") && normalizeId(m.authorId) === authorNorm
-            ),
+          (m) => !(m.id.startsWith("temp-") && m.authorId === message.authorId),
         );
         next = filtered.some((m) => m.id === message.id)
           ? filtered
           : [...filtered, message];
       }
-
       const nextState = {
         messagesByChannel: {
           ...state.messagesByChannel,
@@ -291,9 +297,54 @@ export const useGuildStore = create<GuildState>((set) => ({
         messages:
           state.activeChannelId === message.channelId ? next : state.messages,
       };
-
       writeCache({ ...state, ...nextState });
       return nextState;
+    }),
+
+  updateMessage: (messageId, updates) =>
+    set((state) => {
+      const newByChannel = { ...state.messagesByChannel };
+      for (const [channelId, msgs] of Object.entries(newByChannel)) {
+        const idx = msgs.findIndex((m) => m.id === messageId);
+        if (idx !== -1) {
+          newByChannel[channelId] = [
+            ...msgs.slice(0, idx),
+            { ...msgs[idx], ...updates },
+            ...msgs.slice(idx + 1),
+          ];
+        }
+      }
+      const next = {
+        messagesByChannel: newByChannel,
+        messages: state.activeChannelId
+          ? (newByChannel[state.activeChannelId] ?? state.messages)
+          : state.messages,
+      };
+      writeCache({ ...state, ...next });
+      return next;
+    }),
+
+  removeMessage: (messageId) =>
+    set((state) => {
+      const newByChannel = { ...state.messagesByChannel };
+      for (const [channelId, msgs] of Object.entries(newByChannel)) {
+        const idx = msgs.findIndex((m) => m.id === messageId);
+        if (idx !== -1) {
+          newByChannel[channelId] = [
+            ...msgs.slice(0, idx),
+            { ...msgs[idx], isDeleted: true, content: "Message deleted" },
+            ...msgs.slice(idx + 1),
+          ];
+        }
+      }
+      const next = {
+        messagesByChannel: newByChannel,
+        messages: state.activeChannelId
+          ? (newByChannel[state.activeChannelId] ?? state.messages)
+          : state.messages,
+      };
+      writeCache({ ...state, ...next });
+      return next;
     }),
 
   setMembers: (guildId, members) =>
@@ -307,22 +358,28 @@ export const useGuildStore = create<GuildState>((set) => ({
       return next;
     }),
 
+  setHasMore: (channelId, hasMore) =>
+    set((state) => ({
+      hasMoreMessages: { ...state.hasMoreMessages, [channelId]: hasMore },
+    })),
+
+  setLoadingMore: (channelId, loading) =>
+    set((state) => ({
+      isLoadingMore: { ...state.isLoadingMore, [channelId]: loading },
+    })),
+
   hydrateFromCache: () => {
     const cached = readCache();
     if (!cached) return null;
-
     const activeGuild = cached.activeGuildId
       ? cached.guilds.find((g) => g.id === cached.activeGuildId)
       : undefined;
-
     const channelValid =
       cached.activeChannelId &&
       activeGuild?.channels.some((ch) => ch.id === cached.activeChannelId);
-
     const nextChannelId = channelValid
       ? cached.activeChannelId
       : pickInitialChannelId(activeGuild);
-
     set({
       guilds: cached.guilds ?? [],
       activeGuildId: cached.activeGuildId,
@@ -336,7 +393,6 @@ export const useGuildStore = create<GuildState>((set) => ({
         ? (cached.membersByGuild[cached.activeGuildId] ?? [])
         : [],
     });
-
     return cached;
   },
 
@@ -354,12 +410,14 @@ export const useGuildStore = create<GuildState>((set) => ({
       membersByGuild: {},
       presence: {},
       typingUsers: [],
+      hasMoreMessages: {},
+      isLoadingMore: {},
     });
   },
 
   updatePresence: (userId, status) =>
     set((state) => ({
-      presence: { ...state.presence, [normalizeId(userId)]: status },
+      presence: { ...state.presence, [userId]: status },
     })),
 
   setTyping: (userId, isTyping) =>

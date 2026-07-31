@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -20,6 +21,7 @@ import {
   RequirePermission,
 } from './guards/permissions.guard';
 import { PermissionFlag } from './entities/role.entity';
+import { PermissionsService } from './permission.service';
 
 interface JwtPayload {
   userId: string;
@@ -30,7 +32,10 @@ interface JwtPayload {
 @UseGuards(JwtAuthGuard)
 @Controller('guilds')
 export class GuildsController {
-  constructor(private readonly guildsService: GuildsService) {}
+  constructor(
+    private readonly guildsService: GuildsService,
+    private readonly permissionsService: PermissionsService,
+  ) {}
 
   @Post()
   createGuild(@Body() dto: CreateGuildDto, @CurrentUser() user: JwtPayload) {
@@ -82,6 +87,17 @@ export class GuildsController {
   @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
   getInvites(@Param('id') guildId: string, @CurrentUser() user: JwtPayload) {
     return this.guildsService.getInvites(guildId, user.userId);
+  }
+  
+  @Post(':id/invites')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
+  createInvite(
+    @Param('id') guildId: string,
+    @Body() dto: CreateInviteDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.guildsService.createInvite(guildId, user.userId, dto);
   }
 
   @Delete(':id/leave')
@@ -143,5 +159,19 @@ export class GuildsController {
       targetId,
       dto.type,
     );
+  }
+  @Get(':id/my-permissions')
+  @UseGuards(JwtAuthGuard)
+  async getMyPermissions(
+    @Param('id') guildId: string,
+    @Query('channelId') channelId: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const permissions = await this.permissionsService.computePermissions(
+      user.userId,
+      guildId,
+      channelId,
+    );
+    return { permissions };
   }
 }

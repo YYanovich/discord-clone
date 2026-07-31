@@ -6,11 +6,11 @@ import { useGuildStore } from "../../store/guildStore";
 import CreateChannelModal from "../modals/CreateChannelModal";
 import InviteModal from "../modals/InviteModal";
 
-interface Props {
+interface IChannelSidebar {
   socketRef: RefObject<Socket | null>;
 }
 
-export default function ChannelSidebar({ socketRef }: Props) {
+export default function ChannelSidebar({ socketRef }: IChannelSidebar) {
   const { user } = useAuthStore();
   const { guilds, activeGuildId, activeChannelId, setActiveChannel } =
     useGuildStore();
@@ -19,6 +19,7 @@ export default function ChannelSidebar({ socketRef }: Props) {
   const [showInvite, setShowInvite] = useState(false);
 
   const activeGuild = guilds.find((g) => g.id === activeGuildId);
+
   const isOwner = activeGuild?.ownerId === user?.id;
 
   const handleSelectChannel = (channelId: string) => {
@@ -35,9 +36,7 @@ export default function ChannelSidebar({ socketRef }: Props) {
   if (!activeGuild) {
     return (
       <div className="w-60 bg-zinc-950/60 backdrop-blur-xl border-r border-zinc-800/80 flex items-center justify-center shrink-0">
-        <p className="text-zinc-600 text-sm text-center px-4">
-          Select a server
-        </p>
+        <p className="text-zinc-600 text-sm">Select a server</p>
       </div>
     );
   }
@@ -45,9 +44,8 @@ export default function ChannelSidebar({ socketRef }: Props) {
   const uncategorized = activeGuild.channels.filter(
     (ch) => !ch.categoryId && ch.type === "TEXT",
   );
-
   const voiceChannels = activeGuild.channels.filter(
-    (ch) => ch.type === "VOICE",
+    (ch) => ch.type === "VOICE" && !ch.categoryId,
   );
 
   return (
@@ -58,11 +56,11 @@ export default function ChannelSidebar({ socketRef }: Props) {
             {activeGuild.name}
           </h2>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
             <button
               onClick={() => setShowInvite(true)}
               title="Invite people"
-              className="w-6 h-6 rounded-md flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 transition-all text-base"
+              className="w-7 h-7 rounded-md flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700/60 transition-colors"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -78,7 +76,7 @@ export default function ChannelSidebar({ socketRef }: Props) {
               <button
                 onClick={() => setShowCreateChannel(true)}
                 title="Create channel"
-                className="w-6 h-6 rounded-md flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 transition-all"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700/60 transition-colors"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -93,11 +91,11 @@ export default function ChannelSidebar({ socketRef }: Props) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-2 space-y-0.5 px-2">
+        <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
           {uncategorized.length > 0 && (
             <div className="mb-1">
               <p className="px-2 mb-1 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-                Text Channels
+                Text channels
               </p>
               {uncategorized.map((channel) => {
                 const isActive = activeChannelId === channel.id;
@@ -105,12 +103,13 @@ export default function ChannelSidebar({ socketRef }: Props) {
                   <button
                     key={channel.id}
                     onClick={() => handleSelectChannel(channel.id)}
-                    className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 text-sm rounded-lg transition-colors duration-150 cursor-pointer
-                               ${
-                                 isActive
-                                   ? "bg-zinc-700/80 text-zinc-100"
-                                   : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
-                               }`}
+                    className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5 text-sm rounded-lg transition-colors cursor-pointer
+                      ${
+                        isActive
+                          ? "bg-zinc-700/80 text-zinc-100"
+                          : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
+                      }
+                    `}
                   >
                     <span className="text-zinc-500 text-xs w-4 text-center shrink-0">
                       #
@@ -127,12 +126,9 @@ export default function ChannelSidebar({ socketRef }: Props) {
               (ch) => ch.categoryId === category.id,
             );
             if (channels.length === 0) return null;
-
             return (
               <div key={category.id} className="mt-3">
-                <p
-                  className="px-2 mb-1 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider"
-                >
+                <p className="px-2 mb-1 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                   {category.name}
                 </p>
                 {channels.map((channel) => {
@@ -141,13 +137,15 @@ export default function ChannelSidebar({ socketRef }: Props) {
                     <button
                       key={channel.id}
                       onClick={() => handleSelectChannel(channel.id)}
-                      className={`w-full text-left px-2 py-1.5 flex items-center gap-1.5
-                                 text-sm rounded-lg transition-colors duration-150 cursor-pointer
-                                 ${
-                                   isActive
-                                     ? "bg-zinc-700/80 text-zinc-100"
-                                     : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
-                                 }`}
+                      className={`
+                        w-full text-left px-2 py-1.5 flex items-center gap-1.5
+                        text-sm rounded-lg transition-colors cursor-pointer
+                        ${
+                          isActive
+                            ? "bg-zinc-700/80 text-zinc-100"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
+                        }
+                      `}
                     >
                       <span className="text-zinc-500 text-xs w-4 text-center shrink-0">
                         {channel.type === "VOICE"}
@@ -160,22 +158,20 @@ export default function ChannelSidebar({ socketRef }: Props) {
             );
           })}
 
-          {voiceChannels.filter((ch) => !ch.categoryId).length > 0 && (
+          {voiceChannels.length > 0 && (
             <div className="mt-3">
               <p className="px-2 mb-1 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-                Voice Channels
+                Voice channels
               </p>
-              {voiceChannels
-                .filter((ch) => !ch.categoryId)
-                .map((channel) => (
-                  <button
-                    key={channel.id}
-                    className="w-full text-left px-2 py-1.5 flex items-center gap-1.5 text-sm rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors cursor-pointer"
-                  >
-                    <span className="text-xs w-4 text-center shrink-0">📞</span>
-                    <span className="truncate">{channel.name}</span>
-                  </button>
-                ))}
+              {voiceChannels.map((channel) => (
+                <div
+                  key={channel.id}
+                  className="px-2 py-1.5 flex items-center gap-1.5 text-sm text-zinc-400 rounded-lg"
+                >
+                  <span className="text-xs w-4 text-center shrink-0">🔊</span>
+                  <span className="truncate">{channel.name}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>

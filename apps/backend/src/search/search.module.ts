@@ -6,8 +6,8 @@ import { GuildsModule } from '../guilds/guilds.module';
 
 @Module({
   imports: [GuildsModule],
-  providers: [ElasticsearchService, SearchConsumer],
-  controllers: [SearchController],
+  providers: [ElasticsearchService],
+  controllers: [SearchController, SearchConsumer],
   exports: [ElasticsearchService],
 })
 export class SearchModule {}

@@ -81,6 +81,20 @@ export function useSocket() {
     );
 
     socket.on(
+      "message:update",
+      (data: { id: string; content: string; editedAt: string }) => {
+        useGuildStore.getState().updateMessage(data.id, {
+          content: data.content,
+          editedAt: data.editedAt,
+        });
+      },
+    );
+
+    socket.on("message:delete", (data: { id: string }) => {
+      useGuildStore.getState().removeMessage(data.id);
+    });
+
+    socket.on(
       "presence:update",
       ({
         userId,
@@ -122,6 +136,17 @@ export function useSocket() {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       typingTimers.current.forEach((t) => clearTimeout(t));
       typingTimers.current.clear();
+
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("message:new");
+      socket.off("message:update");
+      socket.off("message:delete");
+      socket.off("presence:update");
+      socket.off("typing:start");
+      socket.off("typing:stop");
+      socket.off("connect_error");
+
       setSocketConnected(false);
       socket.disconnect();
       socketRef.current = null;

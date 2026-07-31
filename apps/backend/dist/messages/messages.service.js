@@ -57,10 +57,45 @@ let MessagesService = class MessagesService {
         return messages.reverse();
     }
     async softDelete(messageId, userId) {
-        await this.messageRepo.update({ id: messageId, authorId: userId }, { isDeleted: true });
+        const message = await this.messageRepo.findOne({
+            where: { id: messageId },
+        });
+        if (!message)
+            throw new common_1.NotFoundException('Message not found');
+        if (message.authorId !== userId)
+            throw new common_1.ForbiddenException('Not allowed');
+        message.isDeleted = true;
+        await this.messageRepo.save(message);
+        try {
+            await this.outboxService.write('messages.deleted', {
+                messageId: message.id,
+                channelId: message.channelId,
+            });
+        }
+        catch (err) {
+            console.error('Outbox write failed, but DB updated:', err);
+        }
     }
     async edit(messageId, userId, content) {
-        await this.messageRepo.update({ id: messageId, authorId: userId }, { content, editedAt: new Date() });
+        const message = await this.messageRepo.findOne({
+            where: { id: messageId },
+        });
+        if (!message)
+            throw new common_1.NotFoundException('Message not found');
+        if (message.authorId !== userId)
+            throw new common_1.ForbiddenException('Not allowed');
+        message.content = content;
+        message.editedAt = new Date();
+        await this.messageRepo.save(message);
+        try {
+            await this.outboxService.write('messages.updated', {
+                messageId: message.id,
+                content: message.content,
+            });
+        }
+        catch (err) {
+            console.error('Outbox write failed, but DB updated:', err);
+        }
     }
 };
 exports.MessagesService = MessagesService;
