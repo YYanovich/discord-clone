@@ -15,6 +15,7 @@ async function bootstrap() {
             client: {
                 clientId: 'discord-clone-search',
                 brokers: [process.env.KAFKA_BROKER ?? 'localhost:9092'],
+                createPartitioner: require('kafkajs').Partitioners.LegacyPartitioner,
             },
             consumer: {
                 groupId: 'discord-clone-search-group',
@@ -27,6 +28,7 @@ async function bootstrap() {
             client: {
                 clientId: 'discord-clone-analytics',
                 brokers: [process.env.KAFKA_BROKER ?? 'localhost:9092'],
+                createPartitioner: require('kafkajs').Partitioners.LegacyPartitioner,
             },
             consumer: {
                 groupId: 'discord-clone-analytics-group',
@@ -41,9 +43,12 @@ async function bootstrap() {
     });
     app.use((0, cookie_parser_1.default)());
     app.setGlobalPrefix('api');
-    await app.startAllMicroservices();
-    await app.listen(3000);
-    console.log('Server running on http://localhost:3000');
+    const port = process.env.PORT ?? 3000;
+    await app.listen(port);
+    console.log(`Server running on http://localhost:${port}`);
+    app.startAllMicroservices().catch((err) => {
+        console.error('Kafka microservices warning:', err.message);
+    });
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

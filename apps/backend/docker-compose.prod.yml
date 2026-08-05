@@ -8,16 +8,60 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U discord"]
+      test: ['CMD-SHELL', 'pg_isready -U discord']
       interval: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+    healthcheck:
+      test:
+        ['CMD', 'kafka-broker-api-versions', '--bootstrap-server', 'kafka:9092']
+      interval: 10s
+      retries: 10
+      start_period: 30s
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'curl -f http://localhost:9200/_cluster/health || exit 1']
+      interval: 10s
+      retries: 10
+      start_period: 30s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    volumes:
+      - ch_data:/var/lib/clickhouse
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:8123/ping']
+      interval: 5s
+      retries: 10
 
   api_1:
     build: .
@@ -29,6 +73,9 @@ services:
       DB_NAME: discord
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      KAFKA_BROKER: kafka:9092
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      CLICKHOUSE_URL: http://clickhouse:8123
       JWT_SECRET: super-secret-jwt-key-change-me
       NODE_ENV: production
       PORT: 3000
@@ -36,6 +83,12 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
 
   api_2:
@@ -48,6 +101,9 @@ services:
       DB_NAME: discord
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      KAFKA_BROKER: kafka:9092
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      CLICKHOUSE_URL: http://clickhouse:8123
       JWT_SECRET: super-secret-jwt-key-change-me
       NODE_ENV: production
       PORT: 3000
@@ -55,6 +111,12 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
 
   api_3:
@@ -67,20 +129,28 @@ services:
       DB_NAME: discord
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      KAFKA_BROKER: kafka:9092
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      CLICKHOUSE_URL: http://clickhouse:8123
       JWT_SECRET: super-secret-jwt-key-change-me
       NODE_ENV: production
       PORT: 3000
-      TYPEORM_MIGRATIONS: dist/migrations/*.js
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
 
   nginx:
     image: nginx:alpine
     ports:
-      - "3000:80"
+      - '3000:80'
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
     depends_on:
@@ -90,3 +160,5 @@ services:
 
 volumes:
   pg_data:
+  es_data:
+  ch_data:

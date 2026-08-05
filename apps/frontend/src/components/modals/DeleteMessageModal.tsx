@@ -26,7 +26,7 @@ export const DeleteMessageModal: React.FC<IDeleteMessageModalProps> = ({
         </p>
 
         {messageContent && (
-          <div className="mt-4 max-h-24 overflow-y-auto rounded-xl bg-[#2b2d31] p-3 text-sm text-zinc-300 break-words border border-zinc-700/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="mt-4 max-h-24 overflow-y-auto rounded-xl bg-[#2b2d31] p-3 text-sm text-zinc-300 wrap-break-word border border-zinc-700/30 scrollbar-none [&::-webkit-scrollbar]:hidden">
             {messageContent}
           </div>
         )}
