@@ -2,8 +2,8 @@ import {
   Controller,
   Get,
   Post,
-  Put,
   Delete,
+  Put,
   Body,
   Param,
   UseGuards,
@@ -12,16 +12,12 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { GuildsService } from './guilds.service';
+import { PermissionsService } from './permission.service';
+import { GuildPermission } from './entities/guild-participant.entity';
 import { CreateGuildDto } from './dto/create-guild.dto';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { CreateInviteDto } from './dto/create-invite.dto';
-import {
-  PermissionsGuard,
-  RequirePermission,
-} from './guards/permissions.guard';
-import { PermissionFlag } from './entities/role.entity';
-import { PermissionsService } from './permission.service';
 
 interface JwtPayload {
   userId: string;
@@ -62,42 +58,73 @@ export class GuildsController {
     return this.guildsService.getMembers(guildId, user.userId);
   }
 
+  @Get(':id/my-permissions')
+  async getMyPermissions(
+    @Param('id') guildId: string,
+    @Query('channelId') channelId: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const permissions = await this.permissionsService.getMyGuildPermissions(
+      user.userId,
+      guildId,
+    );
+    return { permissions };
+  }
+
   @Post(':id/channels')
-  @UseGuards(PermissionsGuard)
-  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
-  createChannel(
+  async createChannel(
     @Param('id') guildId: string,
     @Body() dto: CreateChannelDto,
     @CurrentUser() user: JwtPayload,
   ) {
+    //check permission by permission.service
+    await this.permissionsService.checkGuildPermission(
+      user.userId,
+      guildId,
+      GuildPermission.CREATE_CHANNEL,
+    );
     return this.guildsService.createChannel(guildId, user.userId, dto);
   }
 
   @Post(':id/categories')
-  createCategory(
+  async createCategory(
     @Param('id') guildId: string,
     @Body() dto: CreateCategoryDto,
     @CurrentUser() user: JwtPayload,
   ) {
+    await this.permissionsService.checkGuildPermission(
+      user.userId,
+      guildId,
+      GuildPermission.CREATE_CHANNEL,
+    );
     return this.guildsService.createCategory(guildId, user.userId, dto.name);
   }
 
-  @Get(':id/invites')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
-  getInvites(@Param('id') guildId: string, @CurrentUser() user: JwtPayload) {
-    return this.guildsService.getInvites(guildId, user.userId);
-  }
-  
   @Post(':id/invites')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
-  createInvite(
+  async createInvite(
     @Param('id') guildId: string,
     @Body() dto: CreateInviteDto,
     @CurrentUser() user: JwtPayload,
   ) {
+    await this.permissionsService.checkGuildPermission(
+      user.userId,
+      guildId,
+      GuildPermission.INVITE_USER,
+    );
     return this.guildsService.createInvite(guildId, user.userId, dto);
+  }
+
+  @Get(':id/invites')
+  async getInvites(
+    @Param('id') guildId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    await this.permissionsService.checkGuildPermission(
+      user.userId,
+      guildId,
+      GuildPermission.INVITE_USER,
+    );
+    return this.guildsService.getInvites(guildId, user.userId);
   }
 
   @Delete(':id/leave')
@@ -106,30 +133,34 @@ export class GuildsController {
   }
 
   @Delete(':id/members/:userId/kick')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermission(PermissionFlag.KICK_MEMBERS)
-  kickMember(
+  async kickMember(
     @Param('id') guildId: string,
     @Param('userId') targetUserId: string,
     @CurrentUser() user: JwtPayload,
   ) {
+    await this.permissionsService.checkGuildPermission(
+      user.userId,
+      guildId,
+      GuildPermission.DELETE_USER,
+    );
     return this.guildsService.kickMember(guildId, targetUserId, user.userId);
   }
 
   @Post(':id/members/:userId/ban')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermission(PermissionFlag.BAN_MEMBERS)
-  banMember(
+  async banMember(
     @Param('id') guildId: string,
     @Param('userId') targetUserId: string,
     @CurrentUser() user: JwtPayload,
   ) {
+    await this.permissionsService.checkGuildPermission(
+      user.userId,
+      guildId,
+      GuildPermission.DELETE_USER,
+    );
     return this.guildsService.banMember(guildId, targetUserId, user.userId);
   }
 
   @Put(':id/channels/:channelId/permissions/:targetId')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
   async setChannelOverwrite(
     @Param('id') guildId: string,
     @Param('channelId') channelId: string,
@@ -137,6 +168,11 @@ export class GuildsController {
     @Body() dto: { allow: number; deny: number; type: 'role' | 'user' },
     @CurrentUser() user: JwtPayload,
   ) {
+    await this.permissionsService.checkGuildPermission(
+      user.userId,
+      guildId,
+      GuildPermission.EDIT_GUILD,
+    );
     return this.guildsService.setChannelOverwrite(
       channelId,
       targetId,
@@ -147,31 +183,22 @@ export class GuildsController {
   }
 
   @Delete(':id/channels/:channelId/permissions/:targetId')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermission(PermissionFlag.MANAGE_CHANNELS)
   async deleteChannelOverwrite(
+    @Param('id') guildId: string,
     @Param('channelId') channelId: string,
     @Param('targetId') targetId: string,
     @Body() dto: { type: 'role' | 'user' },
+    @CurrentUser() user: JwtPayload,
   ) {
+    await this.permissionsService.checkGuildPermission(
+      user.userId,
+      guildId,
+      GuildPermission.EDIT_GUILD,
+    );
     return this.guildsService.deleteChannelOverwrite(
       channelId,
       targetId,
       dto.type,
     );
-  }
-  @Get(':id/my-permissions')
-  @UseGuards(JwtAuthGuard)
-  async getMyPermissions(
-    @Param('id') guildId: string,
-    @Query('channelId') channelId: string | undefined,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    const permissions = await this.permissionsService.computePermissions(
-      user.userId,
-      guildId,
-      channelId,
-    );
-    return { permissions };
   }
 }

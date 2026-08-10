@@ -11,8 +11,7 @@ async function getDeviceFingerprint(): Promise<string> {
     const result = await fp.get();
     cachedFingerprint = result.visitorId;
     return cachedFingerprint;
-  } catch (error) {
-    console.error("Failed to generate device fingerprint:", error);
+  } catch {
     return "fallback_device_id";
   }
 }
@@ -29,18 +28,13 @@ const api = axios.create({
 
 axiosBase.interceptors.request.use(async (config) => {
   const fingerprint = await getDeviceFingerprint();
-  if (config.headers) {
-    config.headers["X-Fingerprint"] = fingerprint;
-  }
+  config.headers["X-Fingerprint"] = fingerprint;
   return config;
 });
 
 api.interceptors.request.use(async (config) => {
   const fingerprint = await getDeviceFingerprint();
-  if (config.headers) {
-    config.headers["X-Fingerprint"] = fingerprint;
-  }
-
+  config.headers["X-Fingerprint"] = fingerprint;
   const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -48,30 +42,61 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+let isRefreshing = false;
+let refreshSubscribers: Array<(token: string) => void> = [];
+
+const onRefreshed = (token: string) => {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+};
+
+const onRefreshFailed = () => {
+  refreshSubscribers = [];
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
+
     if (
       error.response?.status === 401 &&
       !original._retry &&
       !original.url?.includes("/auth/login") &&
-      !original.url?.includes("/auth/register")
+      !original.url?.includes("/auth/register") &&
+      !original.url?.includes("/auth/refresh") 
     ) {
       original._retry = true;
+
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          refreshSubscribers.push((token) => {
+            original.headers.Authorization = `Bearer ${token}`;
+            resolve(api(original));
+          });
+        });
+      }
+
+      isRefreshing = true;
+
       try {
         const { data } = await axiosBase.post("/auth/refresh");
-        const currentUser = useAuthStore.getState().user!;
-        useAuthStore.getState().setAuth(data.accessToken, currentUser);
+        useAuthStore.getState().setAuth(data.accessToken, data.user);
+        onRefreshed(data.accessToken);
         original.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(original);
-      } catch {
+      } catch (refreshError) {
+        onRefreshFailed();
         useAuthStore.getState().logout();
         window.location.href = "/login";
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
+
     return Promise.reject(error);
-  },
+  }
 );
 
 export default api;

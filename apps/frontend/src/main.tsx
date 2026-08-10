@@ -2,15 +2,15 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
-import { axiosBase } from "./api/axios";
-import { useAuthStore } from "./store/authStore";
-import { Toaster } from "react-hot-toast";
+import { Toaster } from "sonner";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
     <Toaster
-      position="bottom-center"
+      theme="dark"
+      position="top-right"
+      richColors
       toastOptions={{
         style: {
           background: "#27272a",
@@ -19,18 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           borderRadius: "12px",
           fontSize: "14px",
         },
-        success: { iconTheme: { primary: "#6366f1", secondary: "#fff" } },
-        error: { iconTheme: { primary: "#ef4444", secondary: "#fff" } },
       }}
     />
   </React.StrictMode>,
 );
-
-axiosBase
-  .post("/auth/refresh")
-  .then(({ data }) => {
-    useAuthStore.getState().setAuth(data.accessToken, data.user);
-  })
-  .catch(() => {
-    useAuthStore.getState().logout();
-  });

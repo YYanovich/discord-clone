@@ -13,9 +13,15 @@ export function useSocket() {
   );
 
   const { accessToken, logout } = useAuthStore();
-  const currentUserId = useAuthStore((state) => state.user?.id ?? null);
-  const { addMessage, updatePresence, setTyping } = useGuildStore();
-  const setSocketConnected = useSocketStore((state) => state.setConnected);
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const {
+    addMessage,
+    updateMessage,
+    removeMessage,
+    updatePresence,
+    setTyping,
+  } = useGuildStore();
+  const setSocketConnected = useSocketStore((s) => s.setConnected);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -25,16 +31,23 @@ export function useSocket() {
       withCredentials: true,
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
+      reconnectionDelayMax: 5000,
     });
 
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      console.log("WebSocket connected:", socket.id);
       setSocketConnected(true);
+
       if (currentUserId) {
         updatePresence(currentUserId, "online");
       }
+
+      heartbeatRef.current = setInterval(() => {
+        socket.emit("heartbeat");
+      }, 30_000);
 
       const { activeGuildId, activeChannelId } = useGuildStore.getState();
       if (activeGuildId) {
@@ -44,23 +57,14 @@ export function useSocket() {
         socket.emit("channel:join", {
           channelId: activeChannelId,
           guildId: activeGuildId,
-          userId: currentUserId,
         });
       }
-
-      heartbeatRef.current = setInterval(() => {
-        socket.emit("heartbeat");
-      }, 30000);
     });
 
     socket.on("disconnect", (reason) => {
       console.log("WebSocket disconnected:", reason);
       setSocketConnected(false);
-
-      if (currentUserId) {
-        updatePresence(currentUserId, "offline");
-      }
-
+      if (currentUserId) updatePresence(currentUserId, "offline");
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
@@ -83,7 +87,7 @@ export function useSocket() {
     socket.on(
       "message:update",
       (data: { id: string; content: string; editedAt: string }) => {
-        useGuildStore.getState().updateMessage(data.id, {
+        updateMessage(data.id, {
           content: data.content,
           editedAt: data.editedAt,
         });
@@ -91,7 +95,7 @@ export function useSocket() {
     );
 
     socket.on("message:delete", (data: { id: string }) => {
-      useGuildStore.getState().removeMessage(data.id);
+      removeMessage(data.id);
     });
 
     socket.on(
@@ -107,12 +111,11 @@ export function useSocket() {
       },
     );
 
+    // Typing indicators
     socket.on("typing:start", ({ userId }: { userId: string }) => {
       setTyping(userId, true);
-
       const existing = typingTimers.current.get(userId);
       if (existing) clearTimeout(existing);
-
       const timer = setTimeout(() => {
         setTyping(userId, false);
         typingTimers.current.delete(userId);
@@ -129,37 +132,24 @@ export function useSocket() {
 
     socket.on("connect_error", (err) => {
       console.error("WebSocket connect error:", err.message);
-      if (err.message === "unauthorized") logout();
+      if (
+        err.message === "unauthorized" ||
+        err.message.includes("jwt") ||
+        err.message.includes("token")
+      ) {
+        logout();
+      }
     });
 
     return () => {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       typingTimers.current.forEach((t) => clearTimeout(t));
       typingTimers.current.clear();
-
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("message:new");
-      socket.off("message:update");
-      socket.off("message:delete");
-      socket.off("presence:update");
-      socket.off("typing:start");
-      socket.off("typing:stop");
-      socket.off("connect_error");
-
       setSocketConnected(false);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [
-    accessToken,
-    currentUserId,
-    setSocketConnected,
-    updatePresence,
-    addMessage,
-    setTyping,
-    logout,
-  ]);
+  }, [accessToken, currentUserId]);
 
   return socketRef;
 }

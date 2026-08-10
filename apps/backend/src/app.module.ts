@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
-import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import Redis from 'ioredis';
 
@@ -43,7 +42,6 @@ import { AnalyticsModule } from './analytics/analytics.module';
         }),
       ),
     }),
-    ScheduleModule.forRoot(),
     RedisModule,
     KafkaModule,
     OutboxModule,

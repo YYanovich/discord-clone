@@ -47,7 +47,7 @@ export class UsersService {
   async createSession(data: {
     userId: string;
     sessionId: string;
-    refreshTokenHash: string;
+    refreshTokenHash?: string;
     fingerprint: string;
     userAgent: string;
     ipAddress: string;

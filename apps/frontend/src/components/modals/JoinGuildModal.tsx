@@ -37,7 +37,6 @@ export default function JoinGuildModal({ onClose }: Props) {
           Join by code
         </h2>
 
-
         <input
           type="text"
           value={code}

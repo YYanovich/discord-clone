@@ -14,6 +14,7 @@ export class AnalyticsConsumer {
       messageId: string;
       content: string;
       channelId: string;
+      guildId: string; 
       authorId: string;
       createdAt: string;
     },

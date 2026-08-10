@@ -3,48 +3,87 @@ import {
   Get,
   Query,
   UseGuards,
-  BadRequestException,
+  Post,
+  Logger,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ElasticsearchService, SearchResult } from './elasticsearch.service';
+import { ElasticsearchService } from './elasticsearch.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { GuildsService } from '../guilds/guilds.service';
+import { MessagesService } from '../messages/messages.service';
+
+interface JwtPayload {
+  userId: string;
+}
 
 @UseGuards(JwtAuthGuard)
 @Controller('search')
 export class SearchController {
+  private readonly logger = new Logger('SearchController');
+
   constructor(
     private readonly esService: ElasticsearchService,
     private readonly guildsService: GuildsService,
+    private readonly messagesService: MessagesService,
   ) {}
 
   @Get('messages')
   async searchMessages(
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: JwtPayload,
     @Query('q') query: string,
     @Query('guildId') guildId: string,
     @Query('channelId') channelId?: string,
-    @Query('authorId') authorId?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-  ): Promise<SearchResult> {
+  ) {
+    this.logger.log(
+      `Search request: q="${query}" guildId="${guildId}" userId="${user.userId}"`,
+    );
+
     if (!guildId) {
-      throw new BadRequestException('guildId is required');
+      return { hits: [], total: 0 };
     }
 
     await this.guildsService.assertMembership(guildId, user.userId);
 
-    return this.esService.search({
-      query,
+    const result = await this.esService.search({
+      query: query ?? '',
       guildId,
       channelId,
-      authorId,
-      from,
-      to,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 20,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 20,
     });
+
+    this.logger.log(`Search result: ${result.total} total hits`);
+    return result;
+  }
+
+  @Post('reindex')
+  async reindex(@CurrentUser() user: JwtPayload) {
+    this.logger.log(`Reindex triggered by user: ${user.userId}`);
+
+    const messages = await this.messagesService.findAllWithGuild();
+    this.logger.log(`Found ${messages.length} messages to index`);
+
+    let indexed = 0;
+    let failed = 0;
+
+    for (const msg of messages) {
+      try {
+        await this.esService.indexMessage({
+          messageId: msg.id,
+          content: msg.content,
+          channelId: msg.channelId,
+          guildId: msg.channel?.guildId ?? '',
+          authorId: msg.authorId,
+          createdAt: msg.createdAt.toISOString(),
+        });
+        indexed++;
+      } catch {
+        failed++;
+      }
+    }
+
+    return { indexed, failed, total: messages.length };
   }
 }

@@ -7,11 +7,11 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PermissionsService } from '../permission.service';
-import { PermissionFlag } from '../entities/role.entity';
+import { GuildPermission } from '../entities/guild-participant.entity';
 
 export const REQUIRED_PERMISSION = 'required_permission';
 
-export const RequirePermission = (flag: PermissionFlag) =>
+export const RequirePermission = (flag: GuildPermission) =>
   SetMetadata(REQUIRED_PERMISSION, flag);
 
 @Injectable()
@@ -22,7 +22,7 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const flag = this.reflector.get<PermissionFlag>(
+    const flag = this.reflector.get<GuildPermission>(
       REQUIRED_PERMISSION,
       context.getHandler(),
     );
@@ -32,9 +32,7 @@ export class PermissionsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
 
     const userId = request.user?.userId;
-
     const guildId = request.params.guildId ?? request.params.id;
-    const channelId = request.params.channelId;
 
     if (!userId || !guildId) {
       throw new ForbiddenException('Missing user or guild context');
@@ -44,7 +42,6 @@ export class PermissionsGuard implements CanActivate {
       userId,
       guildId,
       flag,
-      channelId,
     );
 
     if (!hasPermission) {

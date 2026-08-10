@@ -8,15 +8,16 @@ import { Repository } from 'typeorm';
 import { Guild } from './entities/guild.entity';
 import { Category } from './entities/category.entity';
 import { Channel, ChannelType } from './entities/channel.entity';
-import { Membership } from './entities/membership.entity';
 import { Invite } from './entities/invite.entity';
+import {
+  GuildParticipant,
+  GuildPermission,
+} from './entities/guild-participant.entity';
+import { ChannelParticipant } from './entities/channel-participant.entity';
+import { ParticipantStatus } from './entities/participant-status.enum';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { CreateInviteDto } from './dto/create-invite.dto';
 import * as crypto from 'crypto';
-import { Role, PermissionFlag } from './entities/role.entity';
-import { MemberRole } from './entities/member-role.entity';
-import { Ban } from './entities/ban.entity';
-import { ChannelOverwrite } from './entities/channel-overwrite.entity';
 
 @Injectable()
 export class GuildsService {
@@ -27,44 +28,25 @@ export class GuildsService {
     private categoryRepo: Repository<Category>,
     @InjectRepository(Channel)
     private channelRepo: Repository<Channel>,
-    @InjectRepository(Membership)
-    private membershipRepo: Repository<Membership>,
+    @InjectRepository(GuildParticipant)
+    private participantRepo: Repository<GuildParticipant>,
+    @InjectRepository(ChannelParticipant)
+    private channelParticipantRepo: Repository<ChannelParticipant>,
     @InjectRepository(Invite)
     private inviteRepo: Repository<Invite>,
-    @InjectRepository(Role)
-    private readonly roleRepo: Repository<Role>,
-    @InjectRepository(MemberRole)
-    private readonly memberRoleRepo: Repository<MemberRole>,
-    @InjectRepository(Ban)
-    private readonly banRepo: Repository<Ban>,
-    @InjectRepository(ChannelOverwrite)
-    private readonly overwriteRepo: Repository<ChannelOverwrite>,
   ) {}
 
   async createGuild(name: string, ownerId: string): Promise<Guild> {
     const guild = this.guildRepo.create({ name, ownerId });
     const saved = await this.guildRepo.save(guild);
 
-    const everyoneRole = this.roleRepo.create({
-      name: '@everyone',
-      guildId: saved.id,
-      position: 0,
-      permissions: PermissionFlag.VIEW_CHANNEL | PermissionFlag.SEND_MESSAGES,
-    });
-    await this.roleRepo.save(everyoneRole);
-
-    const membership = this.membershipRepo.create({
+    const participant = this.participantRepo.create({
       userId: ownerId,
       guildId: saved.id,
+      status: ParticipantStatus.PARTICIPANT,
+      permissions: GuildPermission.ADMINISTRATOR,
     });
-    await this.membershipRepo.save(membership);
-
-    const memberRole = this.memberRoleRepo.create({
-      userId: ownerId,
-      roleId: everyoneRole.id,
-      guildId: saved.id,
-    });
-    await this.memberRoleRepo.save(memberRole);
+    await this.participantRepo.save(participant);
 
     const defaultChannel = this.channelRepo.create({
       name: 'general',
@@ -78,11 +60,11 @@ export class GuildsService {
   }
 
   async findUserGuilds(userId: string): Promise<Guild[]> {
-    const membership = await this.membershipRepo.find({
-      where: { userId },
+    const participants = await this.participantRepo.find({
+      where: { userId, status: ParticipantStatus.PARTICIPANT },
       relations: { guild: true },
     });
-    return membership.map((m) => m.guild);
+    return participants.map((p) => p.guild);
   }
 
   async findGuildById(guildId: string, userId: string): Promise<Guild> {
@@ -160,10 +142,13 @@ export class GuildsService {
       throw new ForbiddenException('Invite link has reached its maximum uses');
     }
 
-    const ban = await this.banRepo.findOne({
+    const participant = await this.participantRepo.findOne({
       where: { guildId: invite.guildId, userId },
     });
-    if (ban) throw new ForbiddenException('You are banned from this server');
+
+    if (participant && participant.status === ParticipantStatus.BLOCKED) {
+      throw new ForbiddenException('You are banned from this server');
+    }
 
     await this.joinGuild(invite.guildId, userId);
     await this.inviteRepo.update({ id: invite.id }, { uses: invite.uses + 1 });
@@ -181,25 +166,30 @@ export class GuildsService {
     const guild = await this.guildRepo.findOne({ where: { id: guildId } });
     if (!guild) throw new NotFoundException('Guild not found');
 
-    const existing = await this.membershipRepo.findOne({
+    const existing = await this.participantRepo.findOne({
       where: { guildId, userId },
     });
-    if (existing) return;
 
-    const membership = this.membershipRepo.create({ userId, guildId });
-    await this.membershipRepo.save(membership);
-
-    const everyoneRole = await this.roleRepo.findOne({
-      where: { guildId, name: '@everyone' },
-    });
-    if (everyoneRole) {
-      const memberRole = this.memberRoleRepo.create({
-        userId,
-        roleId: everyoneRole.id,
-        guildId,
-      });
-      await this.memberRoleRepo.save(memberRole);
+    if (existing) {
+      if (existing.status === ParticipantStatus.BLOCKED) {
+        throw new ForbiddenException('You are banned from this server');
+      }
+      if (existing.status === ParticipantStatus.PARTICIPANT) {
+        return;
+      }
+      existing.status = ParticipantStatus.PARTICIPANT;
+      await this.participantRepo.save(existing);
+      return;
     }
+
+    const newParticipant = this.participantRepo.create({
+      userId,
+      guildId,
+      status: ParticipantStatus.PARTICIPANT,
+      permissions:
+        GuildPermission.VIEW_CHANNELS | GuildPermission.SEND_MESSAGES,
+    });
+    await this.participantRepo.save(newParticipant);
   }
 
   async leaveGuild(guildId: string, userId: string): Promise<void> {
@@ -212,7 +202,7 @@ export class GuildsService {
       );
     }
 
-    await this.membershipRepo.delete({ guildId, userId });
+    await this.participantRepo.delete({ guildId, userId });
   }
 
   async getMembers(guildId: string, userId?: string) {
@@ -220,13 +210,12 @@ export class GuildsService {
       await this.assertMembership(guildId, userId);
     }
 
-    return this.membershipRepo.find({
-      where: { guildId },
+    return this.participantRepo.find({
+      where: { guildId, status: ParticipantStatus.PARTICIPANT },
       relations: { user: true },
       select: {
         id: true,
         userId: true,
-        joinedAt: true,
         user: {
           id: true,
           username: true,
@@ -235,83 +224,16 @@ export class GuildsService {
     });
   }
 
-  async assertMembership(guildId: string, userId: string): Promise<void> {
-    const membership = await this.membershipRepo.findOne({
-      where: { guildId, userId },
-    });
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this guild');
-    }
-  }
-  async getRoles(guildId: string): Promise<Role[]> {
-    return this.roleRepo.find({
-      where: { guildId },
-      order: { position: 'DESC' },
-    });
-  }
-
-  async createRole(
-    guildId: string,
-    userId: string,
-    dto: { name: string; permissions: number },
-  ): Promise<Role> {
-    await this.assertOwnership(guildId, userId);
-    const role = this.roleRepo.create({ ...dto, guildId });
-    return this.roleRepo.save(role);
-  }
-
-  async updateRole(
-    guildId: string,
-    roleId: string,
-    userId: string,
-    dto: { name?: string; permissions?: number },
-  ): Promise<Role> {
-    await this.assertOwnership(guildId, userId);
-    await this.roleRepo.update({ id: roleId, guildId }, dto);
-    return this.roleRepo.findOne({ where: { id: roleId } }) as Promise<Role>;
-  }
-
-  async deleteRole(
-    guildId: string,
-    roleId: string,
-    userId: string,
-  ): Promise<void> {
-    await this.assertOwnership(guildId, userId);
-    await this.roleRepo.delete({ id: roleId, guildId });
-  }
-
-  async assignRole(
-    guildId: string,
-    roleId: string,
-    targetUserId: string,
-  ): Promise<void> {
-    const existing = await this.memberRoleRepo.findOne({
-      where: { userId: targetUserId, roleId, guildId },
-    });
-    if (existing) return;
-    await this.memberRoleRepo.save(
-      this.memberRoleRepo.create({ userId: targetUserId, roleId, guildId }),
-    );
-  }
-
-  async removeRole(
-    guildId: string,
-    roleId: string,
-    targetUserId: string,
-  ): Promise<void> {
-    await this.memberRoleRepo.delete({ userId: targetUserId, roleId, guildId });
-  }
-
   async kickMember(
     guildId: string,
     targetId: string,
     executorId: string,
   ): Promise<void> {
-    const guild = await this.guildRepo.findOne({ where: { id: guildId } });
-    if (guild?.ownerId === targetId) {
+    const guild = await this.assertOwnership(guildId, executorId);
+    if (guild.ownerId === targetId) {
       throw new ForbiddenException('Cannot kick the guild owner');
     }
-    await this.membershipRepo.delete({ guildId, userId: targetId });
+    await this.participantRepo.delete({ guildId, userId: targetId });
   }
 
   async banMember(
@@ -319,14 +241,75 @@ export class GuildsService {
     targetId: string,
     executorId: string,
   ): Promise<void> {
-    const guild = await this.guildRepo.findOne({ where: { id: guildId } });
-    if (guild?.ownerId === targetId) {
+    const guild = await this.assertOwnership(guildId, executorId);
+    if (guild.ownerId === targetId) {
       throw new ForbiddenException('Cannot ban the guild owner');
     }
-    await this.membershipRepo.delete({ guildId, userId: targetId });
-    const ban = this.banRepo.create({ guildId, userId: targetId });
-    await this.banRepo.save(ban);
+
+    let participant = await this.participantRepo.findOne({
+      where: { guildId, userId: targetId },
+    });
+
+    if (participant) {
+      participant.status = ParticipantStatus.BLOCKED;
+    } else {
+      participant = this.participantRepo.create({
+        guildId,
+        userId: targetId,
+        status: ParticipantStatus.BLOCKED,
+        permissions: 0,
+      });
+    }
+
+    await this.participantRepo.save(participant);
   }
+
+  async setChannelOverwrite(
+    channelId: string,
+    targetId: string,
+    type: 'role' | 'user',
+    allow: number,
+    _deny?: number,
+  ): Promise<ChannelParticipant> {
+    let participant = await this.channelParticipantRepo.findOne({
+      where: { channelId, userId: targetId },
+    });
+
+    if (participant) {
+      participant.permissions = allow;
+    } else {
+      participant = this.channelParticipantRepo.create({
+        channelId,
+        userId: targetId,
+        permissions: allow,
+      });
+    }
+
+    return this.channelParticipantRepo.save(participant);
+  }
+
+  async deleteChannelOverwrite(
+    channelId: string,
+    targetId: string,
+    _type: 'role' | 'user',
+  ): Promise<void> {
+    await this.channelParticipantRepo.delete({ channelId, userId: targetId });
+  }
+
+  async assertMembership(guildId: string, userId: string): Promise<void> {
+    const participant = await this.participantRepo.findOne({
+      where: {
+        guildId,
+        userId,
+        status: ParticipantStatus.PARTICIPANT,
+      },
+    });
+
+    if (!participant) {
+      throw new ForbiddenException('Not a member of this guild');
+    }
+  }
+
   private async assertOwnership(
     guildId: string,
     userId: string,
@@ -337,47 +320,5 @@ export class GuildsService {
       throw new ForbiddenException('Only the owner can perform this action');
     }
     return guild;
-  }
-  async setChannelOverwrite(
-    channelId: string,
-    targetId: string,
-    type: 'role' | 'user',
-    allow: number,
-    deny: number,
-  ): Promise<ChannelOverwrite> {
-    const existing = await this.overwriteRepo.findOne({
-      where:
-        type === 'role'
-          ? { channelId, roleId: targetId }
-          : { channelId, userId: targetId },
-    });
-
-    if (existing) {
-      await this.overwriteRepo.update(existing.id, { allow, deny });
-      return this.overwriteRepo.findOne({
-        where: { id: existing.id },
-      }) as Promise<ChannelOverwrite>;
-    }
-
-    const overwrite = this.overwriteRepo.create({
-      channelId,
-      allow,
-      deny,
-      roleId: type === 'role' ? targetId : null,
-      userId: type === 'user' ? targetId : null,
-    });
-    return this.overwriteRepo.save(overwrite);
-  }
-
-  async deleteChannelOverwrite(
-    channelId: string,
-    targetId: string,
-    type: 'role' | 'user',
-  ): Promise<void> {
-    await this.overwriteRepo.delete(
-      type === 'role'
-        ? { channelId, roleId: targetId }
-        : { channelId, userId: targetId },
-    );
   }
 }

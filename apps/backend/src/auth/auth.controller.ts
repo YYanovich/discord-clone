@@ -5,23 +5,30 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { Throttle } from '@nestjs/throttler';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
+import { RateLimit } from '../common/decorators/rate-limit.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Throttle({ short: { limit: 3, ttl: 60000 } })
+  //3 attempts for registration
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ key: 'register', limit: 3, ttl: 60 })
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
+  //10 attempts got login(protect from brute force)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ key: 'login', limit: 10, ttl: 60 })
   @Post('login')
   async login(
     @Body() dto: LoginDto,
@@ -29,9 +36,8 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const fingerprint = req.headers['x-fingerprint'] as string;
-    if (!fingerprint) {
-      throw new UnauthorizedException('Unable to verify device identity');
-    }
+    if (!fingerprint)
+      throw new UnauthorizedException('Device fingerprint required');
 
     const ipAddress =
       (req.headers['x-forwarded-for'] as string) ||
@@ -46,7 +52,12 @@ export class AuthController {
       userAgent,
     );
 
-    this.setCookies(res, result.refreshToken, result.sessionId);
+    res.cookie('session_id', result.sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     return {
       accessToken: result.accessToken,
@@ -60,20 +71,20 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const fingerprint = req.headers['x-fingerprint'] as string;
-
     if (!fingerprint)
-      throw new UnauthorizedException('Device fingerprint is required');
+      throw new UnauthorizedException('Device fingerprint required');
 
-    const refreshToken = req.cookies?.refresh_token;
     const sessionId = req.cookies?.session_id;
+    if (!sessionId) throw new UnauthorizedException('Session not found');
 
-    const result = await this.authService.refresh(
-      refreshToken,
-      sessionId,
-      fingerprint,
-    );
+    const result = await this.authService.refresh(sessionId, fingerprint);
 
-    this.setCookies(res, result.refreshToken, result.sessionId);
+    res.cookie('session_id', result.sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     return {
       accessToken: result.accessToken,
@@ -84,21 +95,8 @@ export class AuthController {
   @Post('logout')
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const sessionId = req.cookies?.session_id;
-    await this.authService.logout(sessionId);
-    res.clearCookie('refresh_token');
+    if (sessionId) await this.authService.logout(sessionId);
     res.clearCookie('session_id');
     return { success: true };
-  }
-
-  private setCookies(res: Response, refreshToken: string, sessionId: string) {
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict' as const,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    };
-
-    res.cookie('refresh_token', refreshToken, cookieOptions);
-    res.cookie('session_id', sessionId, cookieOptions);
   }
 }

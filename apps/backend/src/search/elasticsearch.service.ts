@@ -59,6 +59,7 @@ export class ElasticsearchService implements OnModuleInit {
       index: 'messages',
       id: doc.messageId,
       document: doc,
+      refresh: true, 
     });
   }
 
@@ -74,11 +75,24 @@ export class ElasticsearchService implements OnModuleInit {
   }): Promise<SearchResult> {
     const must: unknown[] = [
       {
-        match: {
-          content: {
-            query: params.query,
-            fuzziness: 'AUTO',
-          },
+        bool: {
+          should: [
+            {
+              match_phrase_prefix: {
+                content: {
+                  query: params.query,
+                },
+              },
+            },
+            {
+              match: {
+                content: {
+                  query: params.query,
+                  fuzziness: 'AUTO',
+                },
+              },
+            },
+          ],
         },
       },
     ];
@@ -107,9 +121,10 @@ export class ElasticsearchService implements OnModuleInit {
 
     const result = await this.client.search<MessageDocument>({
       index: 'messages',
-      from: ((params.page ?? 1) - 1) * (params.limit ?? 20),
-      size: params.limit ?? 20,
+      from: ((Number(params.page) || 1) - 1) * (Number(params.limit) || 20),
+      size: Number(params.limit) || 20,
       query: { bool: { must, filter } },
+      sort: [{ createdAt: { order: 'desc' } }],
       highlight: {
         fields: { content: {} },
       },

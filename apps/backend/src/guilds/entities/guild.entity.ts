@@ -5,12 +5,10 @@ import {
   ManyToOne,
   OneToMany,
   CreateDateColumn,
-  ManyToMany,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Category } from './category.entity';
 import { Channel } from './channel.entity';
-import { Membership } from './membership.entity';
 import { Invite } from './invite.entity';
 @Entity('guilds')
 export class Guild {
@@ -29,10 +27,6 @@ export class Guild {
   @OneToMany(() => Channel, (channel) => channel.guild, { cascade: true })
   channels!: Channel[];
 
-  @OneToMany(() => Membership, (membership) => membership.guild, {
-    cascade: true,
-  })
-  memberships!: Membership[];
   @OneToMany(() => Invite, (invite) => invite.guild, { cascade: true })
   invites!: Invite[];
   @CreateDateColumn()

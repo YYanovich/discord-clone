@@ -12,10 +12,10 @@ import { OutboxService } from '../outbox/outbox.service';
 export class MessagesService {
   constructor(
     @InjectRepository(Message)
-    private messageRepo: Repository<Message>,
-    private outboxService: OutboxService,
+    private readonly messageRepo: Repository<Message>,
+    private readonly outboxService: OutboxService,
     @InjectDataSource()
-    private dataSource: DataSource,
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(data: {
@@ -70,24 +70,28 @@ export class MessagesService {
   }
 
   async softDelete(messageId: string, userId: string): Promise<void> {
-    const message = await this.messageRepo.findOne({
-      where: { id: messageId },
-    });
-    if (!message) throw new NotFoundException('Message not found');
-    if (message.authorId !== userId)
-      throw new ForbiddenException('Not allowed');
-
-    message.isDeleted = true;
-    await this.messageRepo.save(message);
-
-    try {
-      await this.outboxService.write('messages.deleted', {
-        messageId: message.id,
-        channelId: message.channelId,
+    await this.dataSource.transaction(async (manager) => {
+      const messageRepo = manager.getRepository(Message);
+      const message = await messageRepo.findOne({
+        where: { id: messageId },
       });
-    } catch (err) {
-      console.error('Outbox write failed, but DB updated:', err);
-    }
+
+      if (!message) throw new NotFoundException('Message not found');
+      if (message.authorId !== userId)
+        throw new ForbiddenException('Not allowed');
+
+      message.isDeleted = true;
+      await messageRepo.save(message);
+
+      await this.outboxService.write(
+        'messages.deleted',
+        {
+          messageId: message.id,
+          channelId: message.channelId,
+        },
+        manager,
+      );
+    });
   }
 
   async edit(
@@ -95,24 +99,76 @@ export class MessagesService {
     userId: string,
     content: string,
   ): Promise<void> {
-    const message = await this.messageRepo.findOne({
-      where: { id: messageId },
-    });
-    if (!message) throw new NotFoundException('Message not found');
-    if (message.authorId !== userId)
-      throw new ForbiddenException('Not allowed');
-
-    message.content = content;
-    message.editedAt = new Date();
-    await this.messageRepo.save(message);
-
-    try {
-      await this.outboxService.write('messages.updated', {
-        messageId: message.id,
-        content: message.content,
+    await this.dataSource.transaction(async (manager) => {
+      const messageRepo = manager.getRepository(Message);
+      const message = await messageRepo.findOne({
+        where: { id: messageId },
       });
-    } catch (err) {
-      console.error('Outbox write failed, but DB updated:', err);
+
+      if (!message) throw new NotFoundException('Message not found');
+      if (message.authorId !== userId)
+        throw new ForbiddenException('Not allowed');
+
+      message.content = content;
+      message.editedAt = new Date();
+      await messageRepo.save(message);
+
+      await this.outboxService.write(
+        'messages.updated',
+        {
+          messageId: message.id,
+          content: message.content,
+        },
+        manager,
+      );
+    });
+  }
+
+  //search messages in archive
+  async searchArchive(params: {
+    query: string;
+    guildId: string;
+    channelId?: string;
+    before?: string;
+  }) {
+    //activate pg_trgm
+
+    const qb = this.messageRepo
+      .createQueryBuilder('m')
+      .innerJoin('channels', 'ch', 'ch.id = m.channelId')
+      .where('ch.guild_id = :guildId', { guildId: params.guildId })
+      .andWhere('m.isDeleted = false')
+      .andWhere('similarity(m.content, :query) > 0.1', { query: params.query })
+      .orderBy('similarity(m.content, :query)', 'DESC')
+      .limit(20);
+
+    if (params.channelId) {
+      qb.andWhere('m.channelId = :channelId', { channelId: params.channelId });
     }
+    if (params.before) {
+      qb.andWhere('m.createdAt < :before', { before: params.before });
+    }
+
+    const messages = await qb.getMany();
+    return { hits: messages, total: messages.length, isArchive: true };
+  }
+
+  async findAll(): Promise<Message[]> {
+    return this.messageRepo.find({
+      relations: {
+        channel: true,
+      },
+      where: { isDeleted: false },
+      order: { createdAt: 'ASC' },
+      take: 10000,
+    });
+  }
+  async findAllWithGuild(): Promise<Message[]> {
+    return this.messageRepo.find({
+      where: { isDeleted: false },
+      relations: { channel: true },
+      order: { createdAt: 'ASC' },
+      take: 50000,
+    });
   }
 }

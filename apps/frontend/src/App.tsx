@@ -2,14 +2,12 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import AppPage from "./pages/AppPage";
-import ProtectedRoute from "./components/ProtectedRoute";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
-import { Toaster } from "sonner";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Toaster theme="dark" position="top-right" richColors />
       <Routes>
         <Route
           path="/login"
@@ -25,6 +23,23 @@ export default function App() {
             <PublicRoute>
               <RegisterPage />
             </PublicRoute>
+          }
+        />
+
+        <Route
+          path="/app/guild/:guildId/channel/:channelId"
+          element={
+            <ProtectedRoute>
+              <AppPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app/guild/:guildId"
+          element={
+            <ProtectedRoute>
+              <AppPage />
+            </ProtectedRoute>
           }
         />
         <Route

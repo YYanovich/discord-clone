@@ -1,6 +1,5 @@
 # Compiled output
-/dist
-/build
+
 .tsbuildinfo
 
 # Prevent committing compiled JS/types inside src directory
@@ -8,8 +7,6 @@ src/**/*.js
 src/**/*.js.map
 src/**/*.d.ts
 
-# Dependencies
-/node_modules
 
 # Logs
 logs
@@ -27,7 +24,6 @@ Thumbs.db
 .tmp
 
 # Tests & Coverage
-/coverage
 /.nyc_output
 
 # IDEs and Editors
@@ -69,3 +65,12 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *.tar.zst*
 *-manifest.json
 *-meta.json
+
+dist/
+**/dist/
+build/
+**/build/
+node_modules/
+**/node_modules/
+coverage/
+*.tsbuildinfo
