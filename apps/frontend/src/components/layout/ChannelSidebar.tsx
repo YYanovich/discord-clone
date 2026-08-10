@@ -29,7 +29,6 @@ export default function ChannelSidebar({ socketRef }: IChannelSidebar) {
   const handleSelectChannel = (channelId: string) => {
     //navigate through url
     navigate(`/app/guild/${urlGuildId}/channel/${channelId}`);
-    // Emit одразу — без складного useEffect
     socketRef.current?.emit("channel:join", {
       channelId,
       guildId: urlGuildId,

@@ -66,7 +66,7 @@ export default function SearchModal({ guildId, onClose }: ISearchModal) {
       const { data } = await api.get("/search/messages", {
         params: { q: query.trim(), guildId, page: p, limit: 20 },
       });
-      console.log("Search response:", data); // ← додай це
+      console.log("Search response:", data); 
 
       setResults(p === 1 ? data.hits : [...results, ...data.hits]);
       setTotal(data.total);
