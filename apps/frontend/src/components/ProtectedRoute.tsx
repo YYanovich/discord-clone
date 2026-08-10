@@ -1,22 +1,46 @@
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
+import { axiosBase } from "../api/axios";
 
-interface IProps {
+interface Props {
   children: React.ReactNode;
 }
 
-export default function ProtectedRoute({ children }: IProps) {
-  const { isAuthenticated, isLoading, hadSession } = useAuthStore();
+export function ProtectedRoute({ children }: Props) {
+  const { isAuthenticated, setAuth, logout, setLoading } = useAuthStore();
+  const [checked, setChecked] = useState(false);
 
-  if (isLoading && !hadSession) {
+  useEffect(() => {
+    if (isAuthenticated) {
+      setChecked(true);
+      setLoading(false);
+      return;
+    }
+
+    axiosBase
+      .post("/auth/refresh")
+      .then(({ data }) => {
+        setAuth(data.accessToken, data.user);
+      })
+      .catch(() => {
+        logout();
+      })
+      .finally(() => {
+        setChecked(true);
+        setLoading(false);
+      });
+  }, []);
+
+  if (!checked) {
     return (
-      <div className="min-h-screen bg-[#36393f] flex items-center justify-center">
-        <div className="text-white text-lg">Loading...</div>
+      <div className="h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (!isLoading && !isAuthenticated) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 

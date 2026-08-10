@@ -27,9 +27,13 @@ export default function SearchModal({ guildId, onClose }: ISearchModal) {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -62,6 +66,8 @@ export default function SearchModal({ guildId, onClose }: ISearchModal) {
       const { data } = await api.get("/search/messages", {
         params: { q: query.trim(), guildId, page: p, limit: 20 },
       });
+      console.log("Search response:", data); // ← додай це
+
       setResults(p === 1 ? data.hits : [...results, ...data.hits]);
       setTotal(data.total);
       setPage(p);
@@ -104,15 +110,24 @@ export default function SearchModal({ guildId, onClose }: ISearchModal) {
             placeholder="Search messages..."
             className="flex-1 bg-transparent text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none"
           />
-          
+
           {query && (
             <button
               onClick={() => setQuery("")}
               className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 rounded"
               title="Clear text"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
               </svg>
             </button>
           )}
@@ -131,7 +146,11 @@ export default function SearchModal({ guildId, onClose }: ISearchModal) {
         {searched && (
           <div className="px-4 py-2 border-b border-zinc-800/40 bg-zinc-900/50 flex items-center justify-between">
             <span className="text-zinc-400 text-xs font-medium">
-              {loading ? "Searching..." : total === 0 ? "No results found" : `Found ${total} ${total === 1 ? "result" : "results"}`}
+              {loading
+                ? "Searching..."
+                : total === 0
+                  ? "No results found"
+                  : `Found ${total} ${total === 1 ? "result" : "results"}`}
             </span>
           </div>
         )}

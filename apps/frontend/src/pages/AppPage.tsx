@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAuthStore } from "../store/authStore";
+import { useParams, useNavigate } from "react-router-dom";
 import { useGuildStore } from "../store/guildStore";
 import { useSocket } from "../hooks/useSocket";
 import { useSocketStore } from "../store/socketStore";
@@ -10,98 +10,100 @@ import ChatArea from "../components/layout/ChatArea";
 import MemberList from "../components/layout/MemberList";
 
 export default function AppPage() {
-  const currentUser = useAuthStore((state) => state.user);
-  const accessToken = useAuthStore((state) => state.accessToken);
-  const isAuthLoading = useAuthStore((state) => state.isLoading);
+  const { guildId: urlGuildId, channelId: urlChannelId } = useParams<{
+    guildId?: string;
+    channelId?: string;
+  }>();
+  const navigate = useNavigate();
   const {
     setGuilds,
     activeGuildId,
     setActiveGuild,
+    setActiveChannel,
     setMembers,
-    activeChannelId,
     hydrateFromCache,
+    guilds,
   } = useGuildStore();
 
   const socketRef = useSocket();
-  const isSocketConnected = useSocketStore((state) => state.isConnected);
+  const isSocketConnected = useSocketStore((s) => s.isConnected);
 
+  //hydrate cache during first mounting
   useEffect(() => {
     hydrateFromCache();
   }, []);
-
+//loading guild from backend and select target which is active
   useEffect(() => {
-    if (isAuthLoading || !accessToken) return;
+    const controller = new AbortController();
 
-    let cancelled = false;
-    const cachedActiveGuildId = useGuildStore.getState().activeGuildId;
+    api
+      .get("/guilds", { signal: controller.signal })
+      .then(async ({ data }) => {
+        if (!data.length) return;
 
-    api.get("/guilds").then(async ({ data }) => {
-      if (cancelled || !data.length) return;
+        const fullGuilds = await Promise.all(
+          (data as { id: string }[]).map((g) =>
+            api
+              .get(`/guilds/${g.id}`, { signal: controller.signal })
+              .then((r) => r.data)
+          )
+        );
 
-      const fullGuilds = await Promise.all(
-        (data as { id: string }[]).map((g) =>
-          api.get(`/guilds/${g.id}`).then((r) => r.data),
-        ),
-      );
+        setGuilds(fullGuilds);
 
-      if (cancelled) return;
+        const targetGuildId =
+          urlGuildId &&
+          fullGuilds.some((g: { id: string }) => g.id === urlGuildId)
+            ? urlGuildId
+            : fullGuilds[0]?.id;
 
-      setGuilds(fullGuilds);
+        if (targetGuildId) {
+          setActiveGuild(targetGuildId);
+          if (!urlGuildId) {
+            navigate(`/app/guild/${targetGuildId}`, { replace: true });
+          }
+        }
+      })
+      .catch(() => {});
 
-      const targetGuildId =
-        cachedActiveGuildId &&
-        fullGuilds.some((g: { id: string }) => g.id === cachedActiveGuildId)
-          ? cachedActiveGuildId
-          : fullGuilds[0]?.id;
+    return () => controller.abort();
+  }, []); 
 
-      if (targetGuildId) {
-        setActiveGuild(targetGuildId);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, isAuthLoading]);
-
+//load members after guild loaded
   useEffect(() => {
-    if (!activeGuildId || isAuthLoading || !accessToken) return;
-    let cancelled = false;
+    if (!activeGuildId) return;
+    const controller = new AbortController();
 
-    api.get(`/guilds/${activeGuildId}/members`).then(({ data }) => {
-      if (cancelled) return;
-      setMembers(activeGuildId, data);
-    });
+    api
+      .get(`/guilds/${activeGuildId}/members`, { signal: controller.signal })
+      .then(({ data }) => setMembers(activeGuildId, data))
+      .catch(() => {});
 
-    const currentGuild = useGuildStore
-      .getState()
-      .guilds.find((g) => g.id === activeGuildId);
+    //update guild if channel data is empty
+    const currentGuild = guilds.find((g) => g.id === activeGuildId);
     if (!currentGuild?.channels?.length) {
-      api.get(`/guilds/${activeGuildId}`).then(({ data }) => {
-        if (cancelled) return;
-        setGuilds([data]);
-      });
+      api
+        .get(`/guilds/${activeGuildId}`, { signal: controller.signal })
+        .then(({ data }) => setGuilds([data]))
+        .catch(() => {});
     }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [activeGuildId, accessToken, isAuthLoading]);
+    return () => controller.abort();
+  }, [activeGuildId]);
 
+//get channel url
+  useEffect(() => {
+    if (urlChannelId) {
+      setActiveChannel(urlChannelId);
+    }
+  }, [urlChannelId]);
+
+  //join to guild when socket will be connected
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket?.connected || !isSocketConnected || !activeGuildId) return;
-
     socket.emit("guild:join", { guildId: activeGuildId });
-
-    if (activeChannelId) {
-      socket.emit("channel:join", {
-        channelId: activeChannelId,
-        guildId: activeGuildId,
-        userId: currentUser?.id,
-      });
-    }
-  }, [activeGuildId, activeChannelId, currentUser?.id, isSocketConnected]);
+  }, [activeGuildId, isSocketConnected]);
 
   return (
     <div className="h-screen bg-zinc-950 flex overflow-hidden">

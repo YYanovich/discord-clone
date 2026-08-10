@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, useEffect } from "react";
 import type { RefObject } from "react";
 import type { Socket } from "socket.io-client";
+import { toast } from "sonner";
 import type { IMessage, IMember } from "../../store/guildStore";
 import { useGuildStore } from "../../store/guildStore";
 import { MessageTime } from "./MessageTime";
+import { ConfirmModal } from "../modals/ConfirmModal";
 import api from "../../api/axios";
-import { toast } from "sonner";
-import { DeleteMessageModal } from "../modals/DeleteMessageModal";
+import { useRef } from "react";
 
 interface IMessageItem {
   message: IMessage;
   members: IMember[];
   currentUserId: string;
   socketRef: RefObject<Socket | null>;
-  activeGuildId: string;
 }
 
 export function MessageItem({ message, members, currentUserId }: IMessageItem) {
@@ -29,15 +29,16 @@ export function MessageItem({ message, members, currentUserId }: IMessageItem) {
   const username = member?.user.username ?? "User";
   const isOwn = message.authorId === currentUserId;
   const isTemp = message.id.startsWith("temp-");
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaEditRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (isEditing && textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    if (isEditing && textareaEditRef.current) {
+      const ta = textareaEditRef.current;
+      const len = ta.value.length;
+      ta.setSelectionRange(len, len);
+      ta.focus();
     }
-  }, [editContent, isEditing]);
+  }, [isEditing]);
 
   const handleEdit = async () => {
     if (!editContent.trim() || editContent === message.content) {
@@ -59,7 +60,7 @@ export function MessageItem({ message, members, currentUserId }: IMessageItem) {
     } catch {
       setIsEditing(false);
       setEditContent(message.content);
-      toast.error("Error during editing");
+      toast.error("Failed to edit message");
     }
   };
 
@@ -72,7 +73,7 @@ export function MessageItem({ message, members, currentUserId }: IMessageItem) {
       removeMessage(message.id);
       toast.success("Message deleted");
     } catch {
-      toast.error("Error during editing");
+      toast.error("Failed to delete message");
     }
   };
 
@@ -138,16 +139,13 @@ export function MessageItem({ message, members, currentUserId }: IMessageItem) {
           {isEditing ? (
             <div className="mt-1">
               <textarea
-                ref={textareaRef}
+                ref={textareaEditRef}
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="w-full bg-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-15 scrollbar-none [&::-webkit-scrollbar]:hidden"
-                autoFocus
-                onFocus={(e) => {
-                  const val = e.currentTarget.value;
-                  e.currentTarget.setSelectionRange(val.length, val.length);
-                }}
+                className="w-full bg-zinc-700 text-zinc-100 text-sm rounded-lg
+                           px-3 py-2 resize-none focus:outline-none
+                           focus:ring-1 focus:ring-indigo-500 min-h-15"
               />
               <p className="text-zinc-600 text-[11px] mt-1">
                 Enter — save · Escape — cancel
@@ -161,18 +159,22 @@ export function MessageItem({ message, members, currentUserId }: IMessageItem) {
         </div>
 
         {isOwn && !isTemp && showActions && !isEditing && (
-          <div className="absolute right-4 top-1.5 flex items-center gap-1 bg-zinc-800 border border-zinc-700/80 rounded-lg px-1 py-0.5 shadow-xl">
+          <div
+            className="absolute right-4 top-1.5 flex items-center gap-1
+                          bg-zinc-800 border border-zinc-700/80 rounded-lg
+                          px-1 py-0.5 shadow-xl"
+          >
             <button
               onClick={() => setIsEditing(true)}
               title="Edit"
-              className="p-1.5 text-zinc-400 hover:text-zinc-100 rounded transition-colors text-xs"
+              className="p-1.5 text-zinc-400 hover:text-zinc-100 rounded transition-colors"
             >
               ✏️
             </button>
             <button
               onClick={() => setShowConfirm(true)}
               title="Delete"
-              className="p-1.5 text-zinc-400 hover:text-red-400 rounded transition-colors text-xs"
+              className="p-1.5 text-zinc-400 hover:text-red-400 rounded transition-colors"
             >
               🗑️
             </button>
@@ -181,11 +183,12 @@ export function MessageItem({ message, members, currentUserId }: IMessageItem) {
       </div>
 
       {showConfirm && (
-        <DeleteMessageModal
-          isOpen={showConfirm}
-          onClose={() => setShowConfirm(false)}
+        <ConfirmModal
+          message="Delete this message? This cannot be undone."
+          confirmText="Delete"
+          confirmClassName="bg-red-600 hover:bg-red-500"
           onConfirm={handleDeleteConfirm}
-          messageContent={message.content} // Передаємо текст повідомлення для прев'ю!
+          onCancel={() => setShowConfirm(false)}
         />
       )}
     </>

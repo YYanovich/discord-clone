@@ -1,0 +1,35 @@
+import { Repository } from 'typeorm';
+import { Guild } from './entities/guild.entity';
+import { Category } from './entities/category.entity';
+import { Channel } from './entities/channel.entity';
+import { Invite } from './entities/invite.entity';
+import { GuildParticipant } from './entities/guild-participant.entity';
+import { ChannelParticipant } from './entities/channel-participant.entity';
+import { CreateChannelDto } from './dto/create-channel.dto';
+import { CreateInviteDto } from './dto/create-invite.dto';
+export declare class GuildsService {
+    private guildRepo;
+    private categoryRepo;
+    private channelRepo;
+    private participantRepo;
+    private channelParticipantRepo;
+    private inviteRepo;
+    constructor(guildRepo: Repository<Guild>, categoryRepo: Repository<Category>, channelRepo: Repository<Channel>, participantRepo: Repository<GuildParticipant>, channelParticipantRepo: Repository<ChannelParticipant>, inviteRepo: Repository<Invite>);
+    createGuild(name: string, ownerId: string): Promise<Guild>;
+    findUserGuilds(userId: string): Promise<Guild[]>;
+    findGuildById(guildId: string, userId: string): Promise<Guild>;
+    createChannel(guildId: string, userId: string, dto: CreateChannelDto): Promise<Channel>;
+    createCategory(guildId: string, userId: string, name: string): Promise<Category>;
+    createInvite(guildId: string, userId: string, dto?: CreateInviteDto): Promise<Invite>;
+    joinByInvite(code: string, userId: string): Promise<void>;
+    getInvites(guildId: string, userId: string): Promise<Invite[]>;
+    joinGuild(guildId: string, userId: string): Promise<void>;
+    leaveGuild(guildId: string, userId: string): Promise<void>;
+    getMembers(guildId: string, userId?: string): Promise<GuildParticipant[]>;
+    kickMember(guildId: string, targetId: string, executorId: string): Promise<void>;
+    banMember(guildId: string, targetId: string, executorId: string): Promise<void>;
+    setChannelOverwrite(channelId: string, targetId: string, type: 'role' | 'user', allow: number, _deny?: number): Promise<ChannelParticipant>;
+    deleteChannelOverwrite(channelId: string, targetId: string, _type: 'role' | 'user'): Promise<void>;
+    assertMembership(guildId: string, userId: string): Promise<void>;
+    private assertOwnership;
+}

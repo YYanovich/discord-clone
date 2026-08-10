@@ -12,31 +12,40 @@ interface IAuthState {
   user: IAuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  hadSession: boolean;
 
   setAuth: (token: string, user: IAuthUser) => void;
   setLoading: (loading: boolean) => void;
   logout: () => void;
 }
-const SESSION_HINT_KEY = "discord-clone:had-session";
 
+const SESSION_HINT_KEY = "discord:had-session";
 
 export const useAuthStore = create<IAuthState>((set) => ({
   accessToken: null,
   user: null,
   isAuthenticated: false,
   isLoading: true,
-  hadSession: localStorage.getItem(SESSION_HINT_KEY) === "1",
 
   setAuth: (token, user) => {
     set((state) => {
+      //reset the store only if a different user signs in. Otherwise the next user
+      //could end up seeing cached guilds and messages from the previous session
       if (state.user && state.user.id !== user.id) {
         useGuildStore.getState().resetSessionState();
       }
       return {};
     });
+
+    //keep a small flag in localStorage so we know there was an active session
+    //this lets us show a loading state on the next app start while we restore auth
     localStorage.setItem(SESSION_HINT_KEY, "1");
-    set({ accessToken: token, user, isAuthenticated: true, isLoading: false, hadSession: true });
+
+    set({
+      accessToken: token,
+      user,
+      isAuthenticated: true,
+      isLoading: false,
+    });
   },
 
   setLoading: (loading) => set({ isLoading: loading }),
@@ -49,7 +58,6 @@ export const useAuthStore = create<IAuthState>((set) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
-      hadSession: false,
     });
   },
 }));

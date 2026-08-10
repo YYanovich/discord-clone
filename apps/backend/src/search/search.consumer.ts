@@ -1,6 +1,16 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
-import { ElasticsearchService, MessageDocument } from './elasticsearch.service';
+import { ElasticsearchService } from './elasticsearch.service';
+
+interface MessagePayload {
+  messageId?: string;
+  id?: string;
+  content: string;
+  channelId: string;
+  guildId: string;
+  authorId: string;
+  createdAt: string;
+}
 
 @Controller()
 export class SearchConsumer {
@@ -9,30 +19,77 @@ export class SearchConsumer {
   constructor(private readonly esService: ElasticsearchService) {}
 
   @EventPattern('messages.created')
-  async handleMessageCreated(@Payload() payload: any) {
+  async handleMessageCreated(@Payload() rawPayload: any) {
     try {
-      const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      let message: any = rawPayload;
 
-      if (!data) return;
+      if (
+        rawPayload &&
+        typeof rawPayload === 'object' &&
+        'value' in rawPayload
+      ) {
+        message = rawPayload.value;
+      }
 
-      const doc: MessageDocument = {
-        messageId: data.messageId || data.id,
-        guildId: data.guildId,
-        channelId: data.channelId,
-        authorId: data.authorId || data.userId,
-        content: data.content,
-        createdAt: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString(),
-      };
+      if (typeof message === 'string') {
+        try {
+          message = JSON.parse(message);
+        } catch (parseErr) {
+          this.logger.error('Failed to parse message payload JSON:', parseErr);
+          return;
+        }
+      }
 
-      if (!doc.messageId || !doc.content) {
-        this.logger.warn(`Skipping invalid payload structure: ${JSON.stringify(payload)}`);
+      if (message && typeof message === 'object') {
+        if ('data' in message && message.data) {
+          message =
+            typeof message.data === 'string'
+              ? JSON.parse(message.data)
+              : message.data;
+        } else if ('payload' in message && message.payload) {
+          message =
+            typeof message.payload === 'string'
+              ? JSON.parse(message.payload)
+              : message.payload;
+        }
+      }
+
+      const messageId = message?.messageId || message?.id;
+      const guildId = message?.guildId;
+
+      if (!guildId || !messageId) {
+        this.logger.warn(
+          `Message payload invalid (messageId=${messageId}, guildId=${guildId}) — skipping ES index\n` +
+            `DUMP: ${JSON.stringify(message)}`,
+        );
         return;
       }
 
-      await this.esService.indexMessage(doc);
-      this.logger.log(`Successfully indexed message ${doc.messageId} to Elasticsearch`);
+      const messageDate = new Date(message.createdAt).getTime();
+      if (!isNaN(messageDate)) {
+        const age = Date.now() - messageDate;
+        const ninetyDays = 90 * 24 * 60 * 60 * 1000;
+
+        if (age > ninetyDays) {
+          this.logger.log(
+            `Message ${messageId} is older than 90 days — skipping ES`,
+          );
+          return;
+        }
+      }
+
+      await this.esService.indexMessage({
+        messageId,
+        guildId: message.guildId,
+        content: message.content,
+        channelId: message.channelId,
+        authorId: message.authorId,
+        createdAt: message.createdAt,
+      });
+
+      this.logger.log(`Indexed message ${messageId} in ES`);
     } catch (err) {
-      this.logger.error('Failed to index message in ES:', err);
+      this.logger.error(`Failed to index message:`, err);
     }
   }
 }

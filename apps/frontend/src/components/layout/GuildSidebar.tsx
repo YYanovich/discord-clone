@@ -28,16 +28,16 @@ export default function GuildSidebar({ socketRef }: Props) {
     }
   };
 
+  //navigate through URL
   const handleSelectGuild = (guildId: string) => {
     setActiveGuild(guildId);
+    navigate(`/app/guild/${guildId}`);
     socketRef.current?.emit("guild:join", { guildId });
   };
 
   return (
     <>
-      <div
-        className="w-18 bg-zinc-950/60 backdrop-blur-xl border-r border-zinc-800/80 flex flex-col items-center py-3 gap-2 overflow-y-auto shrink-0"
-      >
+      <div className="w-18 bg-zinc-950/60 backdrop-blur-xl border-r border-zinc-800/80 flex flex-col items-center py-3 gap-2 overflow-y-auto shrink-0">
         {guilds.map((guild) => {
           const isActive = activeGuildId === guild.id;
           return (

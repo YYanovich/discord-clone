@@ -17,7 +17,8 @@ import Redis from 'ioredis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { MessagesService } from '../messages/messages.service';
 import { PermissionsService } from '../guilds/permission.service';
-import { PermissionFlag } from '../guilds/entities/role.entity';
+import { GuildPermission } from '../guilds/entities/guild-participant.entity';
+import { ChannelPermission } from '../guilds/entities/channel-participant.entity';
 
 @WebSocketGateway({
   cors: {
@@ -164,8 +165,7 @@ export class EventsGateway
     const canView = await this.permissionsService.hasPermission(
       userId,
       data.guildId,
-      PermissionFlag.VIEW_CHANNEL,
-      data.channelId,
+      GuildPermission.VIEW_CHANNELS,
     );
 
     if (!canView) {
@@ -230,22 +230,10 @@ export class EventsGateway
   ) {
     const { userId } = client.data;
 
-    const canSend = await this.permissionsService.hasPermission(
-      userId,
-      data.guildId,
-      PermissionFlag.SEND_MESSAGES,
-      data.channelId,
-    );
-
-    if (!canSend) {
-      client.emit('error', { message: 'Missing permissions to send messages' });
-      return;
-    }
-
     const message = await this.messagesService.create({
       content: data.content,
       channelId: data.channelId,
-      authorId: client.data.userId,
+      authorId: userId,
       guildId: data.guildId,
     });
 
@@ -254,10 +242,7 @@ export class EventsGateway
       content: message.content,
       channelId: message.channelId,
       authorId: message.authorId,
-      createdAt:
-        message.createdAt instanceof Date
-          ? message.createdAt.toISOString()
-          : message.createdAt,
+      createdAt: message.createdAt,
     });
 
     return { event: 'message:ack', data: { id: message.id } };
@@ -274,8 +259,7 @@ export class EventsGateway
     const canView = await this.permissionsService.hasPermission(
       userId,
       data.guildId,
-      PermissionFlag.VIEW_CHANNEL,
-      data.channelId,
+      GuildPermission.VIEW_CHANNELS,
     );
 
     if (!canView) {

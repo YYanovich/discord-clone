@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,7 +13,6 @@ async function bootstrap() {
       client: {
         clientId: 'discord-clone-search',
         brokers: [process.env.KAFKA_BROKER ?? 'localhost:9092'],
-        createPartitioner: require('kafkajs').Partitioners.LegacyPartitioner,
       },
       consumer: {
         groupId: 'discord-clone-search-group',
@@ -26,7 +26,6 @@ async function bootstrap() {
       client: {
         clientId: 'discord-clone-analytics',
         brokers: [process.env.KAFKA_BROKER ?? 'localhost:9092'],
-        createPartitioner: require('kafkajs').Partitioners.LegacyPartitioner,
       },
       consumer: {
         groupId: 'discord-clone-analytics-group',
@@ -44,12 +43,17 @@ async function bootstrap() {
   app.use(cookieParser());
   app.setGlobalPrefix('api');
 
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
+  );
+  // startAllMicroservices ПЕРЕД listen
+  await app.startAllMicroservices();
+
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   console.log(`Server running on http://localhost:${port}`);
-
-  app.startAllMicroservices().catch((err) => {
-    console.error('Kafka microservices warning:', err.message);
-  });
 }
 bootstrap();

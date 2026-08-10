@@ -5,6 +5,7 @@ import { useAuthStore } from "../../store/authStore";
 import { useGuildStore } from "../../store/guildStore";
 import CreateChannelModal from "../modals/CreateChannelModal";
 import InviteModal from "../modals/InviteModal";
+import { useNavigate, useParams } from "react-router-dom";
 
 interface IChannelSidebar {
   socketRef: RefObject<Socket | null>;
@@ -12,7 +13,7 @@ interface IChannelSidebar {
 
 export default function ChannelSidebar({ socketRef }: IChannelSidebar) {
   const { user } = useAuthStore();
-  const { guilds, activeGuildId, activeChannelId, setActiveChannel } =
+  const { guilds, activeGuildId, activeChannelId } =
     useGuildStore();
 
   const [showCreateChannel, setShowCreateChannel] = useState(false);
@@ -22,15 +23,18 @@ export default function ChannelSidebar({ socketRef }: IChannelSidebar) {
 
   const isOwner = activeGuild?.ownerId === user?.id;
 
+  const navigate = useNavigate();
+  const { guildId: urlGuildId } = useParams<{ guildId: string }>();
+
   const handleSelectChannel = (channelId: string) => {
-    setActiveChannel(channelId);
-    if (activeGuildId) {
-      socketRef.current?.emit("channel:join", {
-        channelId,
-        guildId: activeGuildId,
-        userId: user?.id,
-      });
-    }
+    //navigate through url
+    navigate(`/app/guild/${urlGuildId}/channel/${channelId}`);
+    // Emit одразу — без складного useEffect
+    socketRef.current?.emit("channel:join", {
+      channelId,
+      guildId: urlGuildId,
+      userId: user?.id,
+    });
   };
 
   if (!activeGuild) {
