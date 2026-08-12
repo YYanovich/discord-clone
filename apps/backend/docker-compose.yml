@@ -83,6 +83,18 @@ services:
       interval: 5s
       retries: 10
 
+      livekit:
+        image: livekit/livekit-server:latest
+        ports:
+          - '7880:7880'
+          - '7881:7881'
+          - '7882:7882/udp'
+        command: --dev
+        healthcheck:
+          test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:7880']
+          interval: 10s
+          retries: 5
+
 volumes:
   pg_data:
   es_data:

@@ -5,8 +5,7 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.KAFKA,
     options: {
@@ -33,6 +32,19 @@ async function bootstrap() {
     },
   });
 
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.KAFKA,
+    options: {
+      client: {
+        clientId: 'discord-clone-voice-analytics',
+        brokers: [process.env.KAFKA_BROKER ?? 'localhost:9092'],
+      },
+      consumer: {
+        groupId: 'discord-clone-voice-analytics-group',
+      },
+    },
+  });
+
   app.enableCors({
     origin: ['http://localhost:5173', 'http://localhost:4173'],
     credentials: true,
@@ -42,7 +54,6 @@ async function bootstrap() {
 
   app.use(cookieParser());
   app.setGlobalPrefix('api');
-
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

@@ -269,4 +269,29 @@ export class ClickHouseService implements OnModuleInit {
       avgMessages: parseFloat(r.avg_messages),
     }));
   }
+
+  async insertVoiceEvent(data: {
+    eventId: string;
+    guildId: string;
+    channelId: string;
+    userId: string;
+    eventType: 'join' | 'leave' | 'mute' | 'unmute' | 'deafen' | 'undeafen';
+    durationSeconds?: number;
+    createdAt: string;
+  }): Promise<void> {
+    await this.client.insert({
+      table: 'discord.message_events',
+      values: [
+        {
+          event_id: data.eventId,
+          guild_id: data.guildId,
+          channel_id: data.channelId,
+          author_id: data.userId,
+          msg_len: data.durationSeconds ?? 0,
+          created_at: data.createdAt,
+        },
+      ],
+      format: 'JSONEachRow',
+    });
+  }
 }
