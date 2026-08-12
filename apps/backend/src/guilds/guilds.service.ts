@@ -321,4 +321,11 @@ export class GuildsService {
     }
     return guild;
   }
+
+  async getMemberInfo(guildId: string, userId: string) {
+    return this.participantRepo.findOne({
+      where: { guildId, userId },
+      relations: { user: true },
+    });
+  }
 }

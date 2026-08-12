@@ -16,6 +16,7 @@ import { KafkaModule } from './kafka/kafka.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { SearchModule } from './search/search.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { VoiceModule } from './voice/voice.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     MessagesModule,
     SearchModule,
     AnalyticsModule,
+    VoiceModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

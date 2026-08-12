@@ -38,4 +38,44 @@ export class RedisService implements OnModuleDestroy {
   async expire(key: string, seconds: number): Promise<void> {
     await this.client.expire(key, seconds);
   }
+  // Hash operations — for members of voice channels
+
+  async hset(key: string, field: string, value: string): Promise<void> {
+    await this.client.hset(key, field, value);
+  }
+
+  async hget(key: string, field: string): Promise<string | null> {
+    return this.client.hget(key, field);
+  }
+
+  async hgetall(key: string): Promise<Record<string, string>> {
+    const result = await this.client.hgetall(key);
+    return result ?? {};
+  }
+
+  async hdel(key: string, ...fields: string[]): Promise<void> {
+    await this.client.hdel(key, ...fields);
+  }
+
+  async hexists(key: string, field: string): Promise<boolean> {
+    const result = await this.client.hexists(key, field);
+    return result === 1;
+  }
+
+  // Set operations — for voice channels guilds, members etc.
+  async sadd(key: string, ...members: string[]): Promise<void> {
+    await this.client.sadd(key, ...members);
+  }
+
+  async srem(key: string, ...members: string[]): Promise<void> {
+    await this.client.srem(key, ...members);
+  }
+
+  async smembers(key: string): Promise<string[]> {
+    return this.client.smembers(key);
+  }
+
+  async scard(key: string): Promise<number> {
+    return this.client.scard(key);
+  }
 }
