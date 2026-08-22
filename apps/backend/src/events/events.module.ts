@@ -4,11 +4,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventsGateway } from './events.gateway';
 import { GuildsModule } from '../guilds/guilds.module';
 import { MessagesModule } from '../messages/messages.module';
+import { VoiceModule } from '../voice/voice.module'; 
 
 @Module({
   imports: [
     GuildsModule,
     forwardRef(() => MessagesModule),
+    VoiceModule, 
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

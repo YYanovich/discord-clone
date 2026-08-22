@@ -2,9 +2,10 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Guild } from './entities/guild.entity';
 import { Category } from './entities/category.entity';
 import { Channel, ChannelType } from './entities/channel.entity';
@@ -34,29 +35,36 @@ export class GuildsService {
     private channelParticipantRepo: Repository<ChannelParticipant>,
     @InjectRepository(Invite)
     private inviteRepo: Repository<Invite>,
+    @InjectDataSource()
+    private dataSource: DataSource,
   ) {}
 
   async createGuild(name: string, ownerId: string): Promise<Guild> {
-    const guild = this.guildRepo.create({ name, ownerId });
-    const saved = await this.guildRepo.save(guild);
+    if (!name || !name.trim()) {
+      throw new BadRequestException('Guild name is required');
+    }
 
-    const participant = this.participantRepo.create({
-      userId: ownerId,
-      guildId: saved.id,
-      status: ParticipantStatus.PARTICIPANT,
-      permissions: GuildPermission.ADMINISTRATOR,
+    return this.dataSource.transaction(async (manager) => {
+      const guild = manager.create(Guild, {
+        name: name.trim(),
+        ownerId,
+      });
+      const savedGuild = await manager.save(guild);
+
+      const participant = manager.create(GuildParticipant, {
+        guildId: savedGuild.id,
+        userId: ownerId,
+        inviterId: null,
+        permissions: ~0,
+        status: ParticipantStatus.PARTICIPANT,
+      });
+      await manager.save(participant);
+
+      return manager.findOne(Guild, {
+        where: { id: savedGuild.id },
+        relations: { channels: true, categories: true },
+      }) as Promise<Guild>;
     });
-    await this.participantRepo.save(participant);
-
-    const defaultChannel = this.channelRepo.create({
-      name: 'general',
-      type: ChannelType.TEXT,
-      guildId: saved.id,
-      categoryId: null,
-    });
-    await this.channelRepo.save(defaultChannel);
-
-    return saved;
   }
 
   async findUserGuilds(userId: string): Promise<Guild[]> {
@@ -83,12 +91,12 @@ export class GuildsService {
     userId: string,
     dto: CreateChannelDto,
   ): Promise<Channel> {
-    const guild = await this.assertOwnership(guildId, userId);
+    await this.assertMembership(guildId, userId);
 
     const channel = this.channelRepo.create({
       name: dto.name,
-      type: dto.type,
-      guildId: guild.id,
+      type: dto.type, 
+      guildId,
       categoryId: dto.categoryId ?? null,
     });
     return this.channelRepo.save(channel);
@@ -99,11 +107,11 @@ export class GuildsService {
     userId: string,
     name: string,
   ): Promise<Category> {
-    const guild = await this.assertOwnership(guildId, userId);
+    await this.assertMembership(guildId, userId);
 
     const category = this.categoryRepo.create({
       name,
-      guildId: guild.id,
+      guildId,
     });
     return this.categoryRepo.save(category);
   }
@@ -151,7 +159,7 @@ export class GuildsService {
     }
 
     await this.joinGuild(invite.guildId, userId);
-    await this.inviteRepo.update({ id: invite.id }, { uses: invite.uses + 1 });
+    await this.inviteRepo.increment({ id: invite.id }, 'uses', 1);
   }
 
   async getInvites(guildId: string, userId: string) {

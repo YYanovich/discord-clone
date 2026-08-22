@@ -49,7 +49,7 @@ export class MessagesService {
     });
   }
 
-  async findByChannel(
+ async findByChannel(
     channelId: string,
     before?: string,
     limit = 50,
@@ -57,7 +57,6 @@ export class MessagesService {
     const query = this.messageRepo
       .createQueryBuilder('message')
       .where('message.channelId = :channelId', { channelId })
-      .andWhere('message.isDeleted = false')
       .orderBy('message.createdAt', 'DESC')
       .limit(limit);
 

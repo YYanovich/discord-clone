@@ -31,7 +31,6 @@ export class PermissionsService {
     }
   }
 
-  //added hasPermission method to support Gateways and Guards checking boolean permissions
   async hasPermission(
     userId: string,
     guildId: string,
@@ -82,28 +81,50 @@ export class PermissionsService {
     channelId: string,
     flag: ChannelPermission,
   ): Promise<void> {
-    const result = await this.dataSource.query(
-      `
-      SELECT
-        g."ownerId" = $1 as is_owner,
-        gp.permissions as guild_permissions,
-        gp.status as guild_status,
-        cp.permissions as channel_permissions
-      FROM channels c
-      JOIN guilds g ON g.id = c."guildId"
-      JOIN guild_participants gp ON gp."guildId" = c."guildId" AND gp."userId" = $1
-      LEFT JOIN channel_participants cp ON cp."channelId" = $2 AND cp."userId" = $1
-      WHERE c.id = $2
-    `,
-      [userId, channelId],
+    const rawChannel = await this.dataSource.query(
+      `SELECT * FROM channels WHERE id = $1`,
+      [channelId],
     );
 
-    if (!result[0]) throw new ForbiddenException('Access denied');
+    if (!rawChannel[0]) {
+      throw new ForbiddenException('Channel not found');
+    }
+
+    const guildId =
+      rawChannel[0].guildId ??
+      rawChannel[0].guild_id ??
+      rawChannel[0].GuildId ??
+      null;
+
+    if (!guildId) {
+      throw new ForbiddenException('Cannot determine guild for channel');
+    }
+
+    const result = await this.dataSource.query(
+      `SELECT
+         gp.permissions       as guild_permissions,
+         gp.status            as guild_status,
+         (g."ownerId" = $1)   as is_owner,
+         cp.permissions       as channel_permissions
+       FROM guild_participants gp
+       JOIN guilds g ON g.id = gp."guildId"
+       LEFT JOIN channel_participants cp
+         ON cp."channelId" = $3 AND cp."userId" = $1
+       WHERE gp."guildId" = $2
+         AND gp."userId" = $1`,
+      [userId, guildId, channelId],
+    );
+
+    if (!result[0]) {
+      throw new ForbiddenException('Not a member of this guild');
+    }
+
     if (result[0].guild_status !== ParticipantStatus.PARTICIPANT) {
       throw new ForbiddenException('Access denied');
     }
 
-    if (result[0].is_owner) return;
+    const isOwner = result[0].is_owner === true || result[0].is_owner === 't';
+    if (isOwner) return;
 
     const guildPerms = Number(result[0].guild_permissions);
     if ((guildPerms & GuildPermission.ADMINISTRATOR) !== 0) return;
