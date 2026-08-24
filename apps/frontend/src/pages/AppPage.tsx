@@ -82,7 +82,7 @@ export default function AppPage() {
                 onClick={() => setIsVoiceMinimized(false)}
               >
                 <PhoneCall className="w-4 h-4 text-green-400 animate-pulse" />
-                <span className="font-medium">Voice connected ({participants.length + 1} members)</span>
+                <span className="font-medium">Voice connected ({participants.length + 1} {(participants.length + 1 === 1) ? "member" : "members"})</span>
               </div>
               <button
                 onClick={() => setIsVoiceMinimized(false)}

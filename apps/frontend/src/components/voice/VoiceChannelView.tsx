@@ -39,7 +39,7 @@ export default function VoiceChannelView({
     isConnecting,
     activeVoiceChannelId,
     activeVoiceGuildId,
-    qualityMetrics, // Підписалися на метрики якості зв'язку
+    qualityMetrics, 
     setMuted,
     setDeafened,
     leaveVoiceChannel,
