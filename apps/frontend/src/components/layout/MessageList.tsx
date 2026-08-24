@@ -40,6 +40,7 @@ export function MessageList({ socketRef, activeChannelId, activeGuildId }: IMess
 
     const cached = useGuildStore.getState().messagesByChannel[activeChannelId];
     if (cached && cached.length > 0) {
+      setMessages(activeChannelId, cached);
       setHasMore(activeChannelId, true);
       return;
     }
@@ -85,7 +86,7 @@ export function MessageList({ socketRef, activeChannelId, activeGuildId }: IMess
       if (s && historyHandler) s.off("message:history", historyHandler);
       s?.off("connect", onConnect);
     };
-  }, [activeChannelId]);
+  }, [activeChannelId, activeGuildId, setMessages, setHasMore, socketRef]);
 
   const loadMore = useCallback(async () => {
     if (isLoadingMore[activeChannelId]) return;
@@ -122,7 +123,7 @@ export function MessageList({ socketRef, activeChannelId, activeGuildId }: IMess
         before: current[0].createdAt, 
       });
     });
-  }, [activeChannelId, activeGuildId, hasMoreMessages, isLoadingMore]);
+  }, [activeChannelId, activeGuildId, hasMoreMessages, isLoadingMore, prependMessages, setHasMore, setLoadingMore, socketRef]);
 
   const channelMessages = messages.filter(
     (m) => m.channelId === activeChannelId

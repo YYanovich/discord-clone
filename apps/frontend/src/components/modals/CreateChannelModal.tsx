@@ -26,14 +26,17 @@ export default function CreateChannelModal({ guildId, onClose }: Props) {
         type,
       });
 
-      const updated = guilds.map((g) =>
-        g.id === guildId ? { ...g, channels: [...g.channels, data] } : g,
-      );
+      const updated = guilds.map((g) => {
+        if (g.id === guildId) {
+          return { ...g, channels: [...(g.channels || []), data] };
+        }
+        return g;
+      });
+      
       setGuilds(updated);
       onClose();
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      setError(e.response?.data?.message ?? "Failed to create channel");
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || "Failed to create channel");
     } finally {
       setLoading(false);
     }

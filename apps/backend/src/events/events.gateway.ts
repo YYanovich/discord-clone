@@ -2,21 +2,23 @@ import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
-  ConnectedSocket,
-  MessageBody,
+  OnGatewayInit,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  ConnectedSocket,
+  MessageBody,
 } from '@nestjs/websockets';
-import type { Server, Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { Logger } from '@nestjs/common';
-import { MessagesService } from '../messages/messages.service';
-import { RedisService } from '../common/redis/redis.service';
-import { PermissionsService } from '../guilds/permission.service';
-import { ChannelPermission } from '../guilds/entities/channel-participant.entity';
 import { GuildsService } from '../guilds/guilds.service';
+import { RedisService } from '../common/redis/redis.service';
+import { Logger } from '@nestjs/common';
+import Redis from 'ioredis';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { MessagesService } from '../messages/messages.service';
+import { PermissionsService } from '../guilds/permission.service';
+import { GuildPermission } from '../guilds/entities/guild-participant.entity';
 import { VoiceService } from '../voice/voice.service';
-import { v4 as uuid } from 'uuid';
 import { LiveKitService } from '../voice/livekit.service';
 import { VoiceAnalyticsService } from '../voice/voice-analytics.service';
 
@@ -26,22 +28,39 @@ import { VoiceAnalyticsService } from '../voice/voice-analytics.service';
     credentials: true,
   },
 })
-export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class EventsGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server!: Server;
 
-  private readonly logger = new Logger('EventsGateway');
+  private logger = new Logger('EventsGateway');
+
+  private userSockets = new Map<string, Set<Socket>>();
 
   constructor(
     private jwtService: JwtService,
-    private messagesService: MessagesService,
-    private redisService: RedisService,
-    private permissionsService: PermissionsService,
     private guildsService: GuildsService,
+    private redisService: RedisService,
+    private messagesService: MessagesService,
+    private permissionsService: PermissionsService,
     private voiceService: VoiceService,
     private livekitService: LiveKitService,
     private voiceAnalyticsService: VoiceAnalyticsService,
   ) {}
+
+  async afterInit(server: Server) {
+    const pubClient = new Redis({
+      host: process.env.REDIS_HOST ?? 'localhost',
+      port: Number(process.env.REDIS_PORT ?? 6379),
+    });
+
+    const subClient = pubClient.duplicate();
+
+    server.adapter(createAdapter(pubClient, subClient));
+
+    this.logger.log('Socket.IO Redis Adapter initialized');
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -59,7 +78,20 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.data.userId = payload.sub;
       client.data.sessionId = payload.sessionId;
 
-      this.logger.log(`Client connected: ${payload.sub}`);
+      if (!this.userSockets.has(payload.sub)) {
+        this.userSockets.set(payload.sub, new Set());
+      }
+      this.userSockets.get(payload.sub)!.add(client);
+
+      const guilds = await this.guildsService.findUserGuilds(payload.sub);
+      const guildIds = guilds.map((g) => g.id);
+      client.data.guildIds = guildIds;
+
+      for (const guildId of guildIds) {
+        client.join(`guild:${guildId}`);
+      }
+
+      await client.join(`voice:user:${payload.sub}`);
 
       await this.redisService.set(
         `presence:${payload.sub}:${payload.sessionId}`,
@@ -67,46 +99,56 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         45,
       );
 
-      await client.join(`voice:user:${payload.sub}`);
-
-      const guilds = await this.guildsService.findUserGuilds(payload.sub);
-      for (const guild of guilds) {
-        await client.join(`guild:${guild.id}`);
-        this.server.to(`guild:${guild.id}`).emit('presence:update', {
+      for (const guildId of guildIds) {
+        this.server.to(`guild:${guildId}`).emit('presence:update', {
           userId: payload.sub,
           status: 'online',
         });
       }
-    } catch (err) {
+
+      this.logger.log(`Client connected: ${payload.sub}`);
+    } catch {
       this.logger.warn('Invalid token on connect');
       client.disconnect();
     }
   }
 
   async handleDisconnect(client: Socket) {
-    const { userId, sessionId } = client.data;
+    const { userId, sessionId, guildIds } = client.data;
     if (!userId) return;
 
-    this.logger.log(`Client disconnected: ${userId}`);
+    const sockets = this.userSockets.get(userId);
+    if (sockets) {
+      sockets.delete(client);
+      if (sockets.size === 0) {
+        this.userSockets.delete(userId);
+      }
+    }
 
     await this.redisService.del(`presence:${userId}:${sessionId}`);
 
-    const otherKeys = await this.redisService.keys(`presence:${userId}:*`);
-    if (otherKeys.length === 0) {
-      const guilds = await this.guildsService.findUserGuilds(userId);
-      for (const guild of guilds) {
-        this.server.to(`guild:${guild.id}`).emit('presence:update', {
+    const otherSessions = await this.redisService.keys(`presence:${userId}:*`);
+
+    if (otherSessions.length === 0 && guildIds && Array.isArray(guildIds)) {
+      for (const guildId of guildIds) {
+        this.server.to(`guild:${guildId}`).emit('presence:update', {
           userId,
           status: 'offline',
         });
       }
     }
 
-    const voiceData = await this.voiceService.getUserVoiceChannel(userId);
-    if (voiceData) {
-      const { channelId, guildId } = voiceData;
-      await this.handleVoiceLeaveInternal(client, userId, channelId, guildId);
+    try {
+      const voiceData = await this.voiceService.getUserVoiceChannel(userId);
+      if (voiceData) {
+        const { channelId, guildId } = voiceData;
+        await this.handleVoiceLeaveInternal(client, userId, channelId, guildId);
+      }
+    } catch (e) {
+      this.logger.error(`Error handling voice disconnect for ${userId}`, e);
     }
+
+    this.logger.log(`Client disconnected: ${userId}`);
   }
 
   @SubscribeMessage('guild:join')
@@ -114,7 +156,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { guildId: string },
   ) {
-    await client.join(`guild:${data.guildId}`);
+    client.join(`guild:${data.guildId}`);
 
     const members = await this.guildsService.getMembers(
       data.guildId,
@@ -130,8 +172,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
     }
 
-    const voiceState = await this.voiceService.getGuildVoiceState(data.guildId);
-    client.emit('voice:guild-state', voiceState);
+    try {
+      const voiceState = await this.voiceService.getGuildVoiceState(
+        data.guildId,
+      );
+      client.emit('voice:guild-state', voiceState);
+    } catch (e) {
+      this.logger.error('Error fetching voice guild state', e);
+    }
   }
 
   @SubscribeMessage('channel:join')
@@ -141,18 +189,20 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const { userId } = client.data;
 
-    try {
-      await this.permissionsService.checkChannelPermission(
-        userId,
-        data.channelId,
-        ChannelPermission.READ,
-      );
-    } catch {
-      client.emit('error', { message: 'No permission to view this channel' });
+    const canView = await this.permissionsService.hasPermission(
+      userId,
+      data.guildId,
+      GuildPermission.VIEW_CHANNELS,
+    );
+
+    if (!canView) {
+      client.emit('error', {
+        message: 'Missing permissions to view this channel',
+      });
       return;
     }
 
-    await client.join(`channel:${data.channelId}`);
+    client.join(`channel:${data.channelId}`);
     client.emit('channel:join:ack', {
       guildId: data.guildId,
       channelId: data.channelId,
@@ -193,28 +243,17 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  emitToGuild(guildId: string, event: string, data: unknown) {
+    this.server.to(`guild:${guildId}`).emit(event, data);
+  }
+
   @SubscribeMessage('message:send')
   async handleMessage(
     @ConnectedSocket() client: Socket,
     @MessageBody()
-    data: {
-      channelId: string;
-      guildId: string;
-      content: string;
-    },
+    data: { channelId: string; guildId: string; content: string },
   ) {
     const { userId } = client.data;
-
-    try {
-      await this.permissionsService.checkChannelPermission(
-        userId,
-        data.channelId,
-        ChannelPermission.WRITE,
-      );
-    } catch {
-      client.emit('error', { message: 'No permission to send messages' });
-      return;
-    }
 
     const message = await this.messagesService.create({
       content: data.content,
@@ -238,22 +277,20 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleHistory(
     @ConnectedSocket() client: Socket,
     @MessageBody()
-    data: {
-      channelId: string;
-      guildId: string;
-      before?: string;
-    },
+    data: { channelId: string; guildId: string; before?: string },
   ) {
     const { userId } = client.data;
 
-    try {
-      await this.permissionsService.checkChannelPermission(
-        userId,
-        data.channelId,
-        ChannelPermission.READ,
-      );
-    } catch {
-      client.emit('error', { message: 'No permission to view this channel' });
+    const canView = await this.permissionsService.hasPermission(
+      userId,
+      data.guildId,
+      GuildPermission.VIEW_CHANNELS,
+    );
+
+    if (!canView) {
+      client.emit('error', {
+        message: 'Missing permissions to view this channel',
+      });
       return;
     }
 
@@ -273,18 +310,19 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const { userId } = client.data;
     const { channelId, guildId } = data;
 
-    try {
-      await this.permissionsService.checkChannelPermission(
-        userId,
-        channelId,
-        ChannelPermission.READ,
-      );
-    } catch {
-      client.emit('voice:error', {
-        message: 'No permission to join voice channel',
-      });
-      return;
+    this.logger.log(
+      `voice:join from ${userId} to channel ${channelId} in guild ${guildId}`,
+    );
+  try {
+    const isMember = await this.guildsService.getMemberInfo(guildId, userId);
+    if (!isMember) {
+      throw new Error('User is not a member of this guild');
     }
+  } catch (err: any) { 
+    this.logger.error(`Voice join denied: ${err.message}`);
+    client.emit('voice:error', { message: 'Not a member of this server' });
+    return;
+  }
 
     const currentVoice = await this.voiceService.getUserVoiceChannel(userId);
     if (currentVoice && currentVoice.channelId !== channelId) {
@@ -299,43 +337,60 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.voiceService.joinChannel(userId, channelId, guildId);
     await client.join(`voice:${channelId}`);
 
-    const member = await this.guildsService.getMemberInfo(guildId, userId);
-    const username = member?.user?.username ?? userId;
+    let livekitCredentials: { token: string; url: string };
+    try {
+      let username = userId;
+      try {
+        const member = await this.guildsService.getMemberInfo(guildId, userId);
+        username = member?.user?.username ?? userId;
+      } catch {}
 
-    const livekitToken = await this.livekitService.generateToken(
-      userId,
-      username,
-      channelId,
-    );
+      livekitCredentials = await this.livekitService.generateToken(
+        userId,
+        username,
+        channelId,
+      );
+    } catch (err) {
+      this.logger.error('LiveKit token generation failed:', err);
+      client.emit('voice:error', {
+        message: 'Failed to generate voice token. Is LiveKit running?',
+      });
+      await this.voiceService.leaveChannel(userId, channelId, guildId);
+      await client.leave(`voice:${channelId}`);
+      return;
+    }
 
-    const participants =
+    const allParticipants =
       await this.voiceService.getChannelParticipants(channelId);
-    const others = participants.filter((p) => p.userId !== userId);
+    const others = allParticipants.filter((p) => p.userId !== userId);
 
     client.emit('voice:joined', {
       channelId,
       participants: others,
-      livekitToken: livekitToken.token,
-      livekitUrl: livekitToken.url,
+      livekitToken: livekitCredentials.token,
+      livekitUrl: livekitCredentials.url,
     });
 
-    client.to(`voice:${channelId}`).emit('voice:user-joined', {
-      userId,
-      channelId,
-    });
+    client
+      .to(`voice:${channelId}`)
+      .emit('voice:user-joined', { userId, channelId });
 
-    const allParticipants =
-      await this.voiceService.getChannelParticipants(channelId);
     this.server.to(`guild:${guildId}`).emit('voice:channel-state', {
       channelId,
       participants: allParticipants,
     });
 
-    await this.voiceAnalyticsService.publishVoiceEvent('voice_join', {
-      userId,
-      channelId,
-      guildId,
-    });
+    try {
+      await this.voiceAnalyticsService.publishVoiceEvent('voice_join', {
+        userId,
+        channelId,
+        guildId,
+      });
+    } catch {}
+
+    this.logger.log(
+      `User ${userId} successfully joined voice channel ${channelId}`,
+    );
   }
 
   @SubscribeMessage('voice:leave')
@@ -379,13 +434,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       participants,
     });
 
-    await this.voiceAnalyticsService.publishVoiceEvent(
-      data.muted ? 'voice_mute' : 'voice_unmute',
-      { userId, channelId: data.channelId, guildId: data.guildId },
-    );
+    try {
+      await this.voiceAnalyticsService.publishVoiceEvent(
+        data.muted ? 'voice_mute' : 'voice_unmute',
+        { userId, channelId: data.channelId, guildId: data.guildId },
+      );
+    } catch {}
   }
 
-  //deafen - mute incoming audio
   @SubscribeMessage('voice:deafen')
   async handleVoiceDeafen(
     @ConnectedSocket() client: Socket,
@@ -406,14 +462,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       deafened: data.deafened,
     });
 
-    await this.voiceAnalyticsService.publishVoiceEvent(
-      data.deafened ? 'voice_deafen' : 'voice_undeafen',
-      { userId, channelId: data.channelId, guildId: data.guildId },
-    );
+    try {
+      await this.voiceAnalyticsService.publishVoiceEvent(
+        data.deafened ? 'voice_deafen' : 'voice_undeafen',
+        { userId, channelId: data.channelId, guildId: data.guildId },
+      );
+    } catch {}
   }
 
-  //speaking indicator — VAD(Voice Activity Detection)
-  //frontend analise user by Web Audio API and tell server if user are apeaking
   @SubscribeMessage('voice:speaking')
   handleVoiceSpeaking(
     @ConnectedSocket() client: Socket,
@@ -424,10 +480,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       userId,
       speaking: data.speaking,
     });
-  }
-
-  emitToGuild(guildId: string, event: string, data: unknown) {
-    this.server.to(`guild:${guildId}`).emit(event, data);
   }
 
   async getChannelVoiceParticipants(channelId: string) {
@@ -452,7 +504,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       (Date.now() - new Date(participant.joinedAt).getTime()) / 1000,
     );
 
-    await client.leave(`voice:${channelId}`);
+    client.leave(`voice:${channelId}`);
 
     client.to(`voice:${channelId}`).emit('voice:user-left', {
       userId,
@@ -464,11 +516,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       channelId,
       participants: remaining,
     });
-    await this.voiceAnalyticsService.publishVoiceEvent('voice_leave', {
-      userId,
-      channelId,
-      guildId,
-      durationSeconds,
-    });
+
+    try {
+      await this.voiceAnalyticsService.publishVoiceEvent('voice_leave', {
+        userId,
+        channelId,
+        guildId,
+        durationSeconds,
+      });
+    } catch {}
   }
 }

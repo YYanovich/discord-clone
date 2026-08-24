@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -35,7 +36,10 @@ export class GuildsController {
 
   @Post()
   createGuild(@Body() dto: CreateGuildDto, @CurrentUser() user: JwtPayload) {
-    return this.guildsService.createGuild(dto.name, user.userId);
+    if (!dto?.name?.trim()) {
+      throw new BadRequestException('Server name is required');
+    }
+    return this.guildsService.createGuild(dto.name.trim(), user.userId);
   }
 
   @Get()
@@ -77,13 +81,17 @@ export class GuildsController {
     @Body() dto: CreateChannelDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    //check permission by permission.service
-    await this.permissionsService.checkGuildPermission(
-      user.userId,
-      guildId,
-      GuildPermission.CREATE_CHANNEL,
-    );
-    return this.guildsService.createChannel(guildId, user.userId, dto);
+    try {
+      await this.permissionsService.checkGuildPermission(
+        user.userId,
+        guildId,
+        GuildPermission.CREATE_CHANNEL,
+      );
+      return await this.guildsService.createChannel(guildId, user.userId, dto);
+    } catch (error: any) {
+      if (error.status) throw error; 
+      throw new BadRequestException(`Controller Error: ${error.message}`);
+    }
   }
 
   @Post(':id/categories')
@@ -92,12 +100,17 @@ export class GuildsController {
     @Body() dto: CreateCategoryDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    await this.permissionsService.checkGuildPermission(
-      user.userId,
-      guildId,
-      GuildPermission.CREATE_CHANNEL,
-    );
-    return this.guildsService.createCategory(guildId, user.userId, dto.name);
+    try {
+      await this.permissionsService.checkGuildPermission(
+        user.userId,
+        guildId,
+        GuildPermission.CREATE_CHANNEL,
+      );
+      return await this.guildsService.createCategory(guildId, user.userId, dto.name);
+    } catch (error: any) {
+      if (error.status) throw error;
+      throw new BadRequestException(`Controller Error: ${error.message}`);
+    }
   }
 
   @Post(':id/invites')

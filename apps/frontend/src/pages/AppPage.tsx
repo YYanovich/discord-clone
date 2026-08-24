@@ -1,116 +1,103 @@
-import { useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useGuildStore } from "../store/guildStore";
 import { useSocket } from "../hooks/useSocket";
-import { useSocketStore } from "../store/socketStore";
-import api from "../api/axios";
+import { useVoiceSocket } from "../hooks/useVoiceSocket";
+import { useVoiceStore } from "../store/voiceStore";
+import { useAppBootstrap } from "../hooks/useAppBootstrap";
 import GuildSidebar from "../components/layout/GuildSidebar";
 import ChannelSidebar from "../components/layout/ChannelSidebar";
 import ChatArea from "../components/layout/ChatArea";
 import MemberList from "../components/layout/MemberList";
+import VoiceChannelView from "../components/voice/VoiceChannelView";
+import { PhoneCall } from "lucide-react"; 
 
 export default function AppPage() {
   const { guildId: urlGuildId, channelId: urlChannelId } = useParams<{
     guildId?: string;
     channelId?: string;
   }>();
-  const navigate = useNavigate();
-  const {
-    setGuilds,
-    activeGuildId,
-    setActiveGuild,
-    setActiveChannel,
-    setMembers,
-    hydrateFromCache,
-    guilds,
-  } = useGuildStore();
-
+  
   const socketRef = useSocket();
-  const isSocketConnected = useSocketStore((s) => s.isConnected);
+  const { activeGuildId, guilds } = useGuildStore();
+  const { activeVoiceChannelId, participants } = useVoiceStore();
+  const [isVoiceMinimized, setIsVoiceMinimized] = useState(false);
 
-  //hydrate cache during first mounting
+  useVoiceSocket(socketRef);
+  
+  useAppBootstrap(urlGuildId, urlChannelId, socketRef);
+
+  const activeGuild = guilds.find((g) => g.id === activeGuildId);
+  const currentViewedChannel = activeGuild?.channels?.find((c) => c.id === urlChannelId);
+  
+  const isViewingVoiceChannel = currentViewedChannel?.type === "VOICE";
+  const isConnectedToVoice = Boolean(activeVoiceChannelId);
+  
+  const showSplitScreen = isConnectedToVoice && !isViewingVoiceChannel && !isVoiceMinimized;
+
   useEffect(() => {
-    hydrateFromCache();
-  }, []);
-//loading guild from backend and select target which is active
-  useEffect(() => {
-    const controller = new AbortController();
-
-    api
-      .get("/guilds", { signal: controller.signal })
-      .then(async ({ data }) => {
-        if (!data.length) return;
-
-        const fullGuilds = await Promise.all(
-          (data as { id: string }[]).map((g) =>
-            api
-              .get(`/guilds/${g.id}`, { signal: controller.signal })
-              .then((r) => r.data)
-          )
-        );
-
-        setGuilds(fullGuilds);
-
-        const targetGuildId =
-          urlGuildId &&
-          fullGuilds.some((g: { id: string }) => g.id === urlGuildId)
-            ? urlGuildId
-            : fullGuilds[0]?.id;
-
-        if (targetGuildId) {
-          setActiveGuild(targetGuildId);
-          if (!urlGuildId) {
-            navigate(`/app/guild/${targetGuildId}`, { replace: true });
-          }
-        }
-      })
-      .catch(() => {});
-
-    return () => controller.abort();
-  }, []); 
-
-//load members after guild loaded
-  useEffect(() => {
-    if (!activeGuildId) return;
-    const controller = new AbortController();
-
-    api
-      .get(`/guilds/${activeGuildId}/members`, { signal: controller.signal })
-      .then(({ data }) => setMembers(activeGuildId, data))
-      .catch(() => {});
-
-    //update guild if channel data is empty
-    const currentGuild = guilds.find((g) => g.id === activeGuildId);
-    if (!currentGuild?.channels?.length) {
-      api
-        .get(`/guilds/${activeGuildId}`, { signal: controller.signal })
-        .then(({ data }) => setGuilds([data]))
-        .catch(() => {});
+    if (isViewingVoiceChannel) {
+      setIsVoiceMinimized(false);
     }
-
-    return () => controller.abort();
-  }, [activeGuildId]);
-
-//get channel url
-  useEffect(() => {
-    if (urlChannelId) {
-      setActiveChannel(urlChannelId);
-    }
-  }, [urlChannelId]);
-
-  //join to guild when socket will be connected
-  useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket?.connected || !isSocketConnected || !activeGuildId) return;
-    socket.emit("guild:join", { guildId: activeGuildId });
-  }, [activeGuildId, isSocketConnected]);
+  }, [isViewingVoiceChannel]);
 
   return (
     <div className="h-screen bg-zinc-950 flex overflow-hidden">
       <GuildSidebar socketRef={socketRef} />
       <ChannelSidebar socketRef={socketRef} />
-      <ChatArea socketRef={socketRef} />
-      <MemberList />
+
+      {isViewingVoiceChannel && (
+        <div className="flex-1 flex overflow-hidden bg-zinc-900 relative">
+          <div className="flex-1 w-full h-full">
+            <VoiceChannelView socketRef={socketRef} />
+          </div>
+        </div>
+      )}
+
+      {showSplitScreen && (
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="shrink-0 h-[35vh] min-h-50 border-b border-zinc-800/80 flex bg-zinc-900 relative min-w-0">
+            <div className="flex-1 w-full h-full overflow-hidden flex flex-col min-h-0">
+              <VoiceChannelView 
+                socketRef={socketRef} 
+                isSplitScreen={true} 
+                onMinimize={() => setIsVoiceMinimized(true)} 
+              />
+            </div>
+          </div>
+          
+          <div className="flex-1 flex overflow-hidden relative">
+            <ChatArea socketRef={socketRef} />
+            <MemberList />
+          </div>
+        </div>
+      )}
+
+      {!isViewingVoiceChannel && !showSplitScreen && (
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+          {isConnectedToVoice && (
+            <div className="bg-zinc-900/90 border-b border-zinc-800 px-4 py-2 flex items-center justify-between text-xs text-zinc-300 shadow-sm">
+              <div 
+                className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors" 
+                onClick={() => setIsVoiceMinimized(false)}
+              >
+                <PhoneCall className="w-4 h-4 text-green-400 animate-pulse" />
+                <span className="font-medium">Voice connected ({participants.length + 1} {(participants.length + 1 === 1) ? "member" : "members"})</span>
+              </div>
+              <button
+                onClick={() => setIsVoiceMinimized(false)}
+                className="text-indigo-400 hover:text-indigo-300 hover:underline font-medium transition-colors"
+              >
+                Open window
+              </button>
+            </div>
+          )}
+          <div className="flex-1 flex overflow-hidden">
+            <ChatArea socketRef={socketRef} />
+            <MemberList />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

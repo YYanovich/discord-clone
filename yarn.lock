@@ -1035,7 +1035,12 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@livekit/protocol@^1.48.0":
+"@livekit/mutex@1.1.1":
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/@livekit/mutex/-/mutex-1.1.1.tgz#72492b611d55be8130ba2271b7a436d94b1bc6d4"
+  integrity sha512-EsshAucklmpuUAfkABPxJNhzj9v2sG7JuzFDL4ML1oJQSV14sqrpTYnsaOudMAw9yOaW53NU3QQTlUQoRs4czw==
+
+"@livekit/protocol@1.50.4", "@livekit/protocol@^1.48.0":
   version "1.50.4"
   resolved "https://registry.yarnpkg.com/@livekit/protocol/-/protocol-1.50.4.tgz#31495741dd786924b8ba6e190dd2a6e5d3711c51"
   integrity sha512-L1uggNQAqyY21smQY8AllyOYbcv9Me9TaxwuLytL1R8ck9nbYPmQLNwEDi3pOFGAMa5F8I2nUi2Jc59W5awxlA==
@@ -3429,7 +3434,7 @@ etag@^1.8.1:
   resolved "https://registry.yarnpkg.com/etag/-/etag-1.8.1.tgz#41ae2eeb65efa62268aebfea83ac7d79299b0887"
   integrity sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==
 
-events@^3.2.0:
+events@^3.2.0, events@^3.3.0:
   version "3.3.0"
   resolved "https://registry.yarnpkg.com/events/-/events-3.3.0.tgz#31a95ad0a924e2d2c419a813aeb2c4e878ea7400"
   integrity sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==
@@ -4458,6 +4463,11 @@ jose@^5.1.2:
   resolved "https://registry.yarnpkg.com/jose/-/jose-5.10.0.tgz#c37346a099d6467c401351a9a0c2161e0f52c4be"
   integrity sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==
 
+jose@^6.1.0:
+  version "6.2.9"
+  resolved "https://registry.yarnpkg.com/jose/-/jose-6.2.9.tgz#344fa11af928f8000a4f81972c4d567d587170f0"
+  integrity sha512-XrchZOFZUl/T3vTwRe8XK+cJrGtMF4th1ARnDfwbBXFKThGhlsxEE4Zu03AD/bjJSt/9jT/mxrOCkJWOg77aPA==
+
 js-tokens@^4.0.0:
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/js-tokens/-/js-tokens-4.0.0.tgz#19203fb59991df98e3a287050d4647cdeaf32499"
@@ -4674,6 +4684,21 @@ lines-and-columns@^1.1.6:
   resolved "https://registry.yarnpkg.com/lines-and-columns/-/lines-and-columns-1.2.4.tgz#eca284f75d2965079309dc0ad9255abb2ebc1632"
   integrity sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==
 
+livekit-client@^2.21.0:
+  version "2.21.0"
+  resolved "https://registry.yarnpkg.com/livekit-client/-/livekit-client-2.21.0.tgz#694bee97e7e37594a7fabbb1c69e84699d6cc0ce"
+  integrity sha512-RBUhPkV/sl1nzl8lokVlK5uATPwn0AlsudCBZXissw/kDl9yz8ac4pNJ43iPpMVoHOeBYH/BZ3vUC1adqa/zFQ==
+  dependencies:
+    "@livekit/mutex" "1.1.1"
+    "@livekit/protocol" "1.50.4"
+    events "^3.3.0"
+    jose "^6.1.0"
+    loglevel "^1.9.2"
+    sdp-transform "^2.15.0"
+    tslib "2.8.1"
+    typed-emitter "^2.1.0"
+    webrtc-adapter "9.0.6"
+
 livekit-server-sdk@^2.17.0:
   version "2.17.0"
   resolved "https://registry.yarnpkg.com/livekit-server-sdk/-/livekit-server-sdk-2.17.0.tgz#504780861dbd45609d6783977e879637992d3ba3"
@@ -4765,6 +4790,11 @@ log-symbols@^4.1.0:
     chalk "^4.1.0"
     is-unicode-supported "^0.1.0"
 
+loglevel@^1.9.2:
+  version "1.9.2"
+  resolved "https://registry.yarnpkg.com/loglevel/-/loglevel-1.9.2.tgz#c2e028d6c757720107df4e64508530db6621ba08"
+  integrity sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==
+
 lru-cache@^10.2.0:
   version "10.4.3"
   resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-10.4.3.tgz#410fc8a17b70e598013df257c2446b7f3383f119"
@@ -4781,6 +4811,11 @@ lru-cache@^5.1.1:
   integrity sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==
   dependencies:
     yallist "^3.0.2"
+
+lucide-react@^1.31.0:
+  version "1.31.0"
+  resolved "https://registry.yarnpkg.com/lucide-react/-/lucide-react-1.31.0.tgz#1e758f3f86bc0456957d447e6e550b645d96e255"
+  integrity sha512-G8u2eEtoHUnUa9f8lbvqDhCiORMnYLdUEo06EEG9MQvHQrInKcX3Pa2TH39MM5qyzRcWETxB0+aOwAPI1g1kEg==
 
 luxon@~3.7.0:
   version "3.7.2"
@@ -5574,7 +5609,7 @@ rxjs@7.8.1:
   dependencies:
     tslib "^2.1.0"
 
-rxjs@^7.8.1:
+rxjs@^7.5.2, rxjs@^7.8.1:
   version "7.8.2"
   resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.8.2.tgz#955bc473ed8af11a002a2be52071bf475638607b"
   integrity sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==
@@ -5614,6 +5649,16 @@ schema-utils@^4.3.0, schema-utils@^4.3.3:
     ajv "^8.9.0"
     ajv-formats "^2.1.1"
     ajv-keywords "^5.1.0"
+
+sdp-transform@^2.15.0:
+  version "2.15.0"
+  resolved "https://registry.yarnpkg.com/sdp-transform/-/sdp-transform-2.15.0.tgz#79d37a2481916f36a0534e07b32ceaa87f71df42"
+  integrity sha512-KrOH82c/W+GYQ0LHqtr3caRpM3ITglq3ljGUIb8LTki7ByacJZ9z+piSGiwZDsRyhQbYBOBJgr2k6X4BZXi3Kw==
+
+sdp@^3.2.0:
+  version "3.2.2"
+  resolved "https://registry.yarnpkg.com/sdp/-/sdp-3.2.2.tgz#fdef97433fd61d8950cac8987803a84b11fc0aba"
+  integrity sha512-xZocWwfyp4hkbN4hLWxMjmv2Q8aNa9MhmOZ7L9aCZPT+dZsgRr6wZRrSYE3HTdyk/2pZKPSgqI7ns7Een1xMSA==
 
 secure-json-parse@^3.0.1:
   version "3.0.2"
@@ -5773,10 +5818,10 @@ socket.io@*, socket.io@4.8.3, socket.io@^4.8.3:
     socket.io-adapter "~2.5.2"
     socket.io-parser "~4.2.4"
 
-sonner@^2.0.7:
-  version "2.0.7"
-  resolved "https://registry.yarnpkg.com/sonner/-/sonner-2.0.7.tgz#810c1487a67ec3370126e0f400dfb9edddc3e4f6"
-  integrity sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w==
+sonner@^2.0.8:
+  version "2.0.8"
+  resolved "https://registry.yarnpkg.com/sonner/-/sonner-2.0.8.tgz#dbfa02bb4eb0924616800a4594e9a455a9a195ac"
+  integrity sha512-UM/ByIoFra8yzV75n1o0Puu0bw5U/9UNnDacrJNspekBewIfsQ3D6ez1nvlWpt7aTsO6rujQtifBpycwIivqlg==
 
 source-map-js@^1.2.1:
   version "1.2.1"
@@ -6189,6 +6234,13 @@ type-is@^2.0.1, type-is@^2.1.0:
     media-typer "^1.1.0"
     mime-types "^3.0.0"
 
+typed-emitter@^2.1.0:
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/typed-emitter/-/typed-emitter-2.1.0.tgz#ca78e3d8ef1476f228f548d62e04e3d4d3fd77fb"
+  integrity sha512-g/KzbYKbH5C2vPkaXGu8DJlHrGKHLsM25Zg9WuC9pMGfuvT+X25tZQWo5fK1BjBm8+UrVE9LDCvaY0CQk+fXDA==
+  optionalDependencies:
+    rxjs "^7.5.2"
+
 typedarray@^0.0.6:
   version "0.0.6"
   resolved "https://registry.yarnpkg.com/typedarray/-/typedarray-0.0.6.tgz#867ac74e3864187b1d3d47d996a78ec5c8830777"
@@ -6434,6 +6486,13 @@ webpack@5.106.2:
     terser-webpack-plugin "^5.3.17"
     watchpack "^2.5.1"
     webpack-sources "^3.3.4"
+
+webrtc-adapter@9.0.6:
+  version "9.0.6"
+  resolved "https://registry.yarnpkg.com/webrtc-adapter/-/webrtc-adapter-9.0.6.tgz#d89ce0d7b6b8b49f07bdbd1273074006744905a6"
+  integrity sha512-CHbl2ZQbxx164IgWRgzJno4hWtM4tFbRam1QfI3Yxhs3w/DvqluVxVWeXs3oL5/fbGkSNLKo0Ty5MgUWceNhog==
+  dependencies:
+    sdp "^3.2.0"
 
 which@^2.0.1:
   version "2.0.2"

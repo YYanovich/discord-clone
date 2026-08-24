@@ -1,7 +1,15 @@
-import { ChannelType } from '../entities/channel.entity';
+import { IsString, IsNotEmpty, IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { ChannelType } from '../entities/channel.entity'; 
 
 export class CreateChannelDto {
-  name!: string;
-  type!: ChannelType;
-  categoryId?: string; 
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @IsEnum(ChannelType)
+  type: ChannelType;
+
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
 }
